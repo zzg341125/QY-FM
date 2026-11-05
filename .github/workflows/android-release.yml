@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.KEYSTORE_B64 }}
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 || secrets.KEYSTORE_B64 || vars.KEYSTORE_B64 || secrets.KEYSTORE }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || vars.KEYSTORE_PASSWORD || secrets.STORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS || secrets.ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD || secrets.STORE_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -52,9 +52,13 @@ jobs:
 
       - name: Prepare signing config
         id: sign
-        if: env.KEYSTORE_BASE64 != ''
         run: |
           echo "KEYSTORE_BASE64 长度: ${#KEYSTORE_BASE64}"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "suffix=-unsigned" >> "$GITHUB_OUTPUT"
+            echo "::warning::没有读到 KEYSTORE_BASE64。请在 Settings -> Secrets and variables -> Actions 的 Secrets 页签新建，名字必须是 KEYSTORE_BASE64"
+            exit 0
+          fi
           echo "开头 8 位: ${KEYSTORE_BASE64:0:8}"
           echo "结尾 8 位: ${KEYSTORE_BASE64: -8}"
           echo "KEYSTORE_PASSWORD 为空? $([ -z "$KEYSTORE_PASSWORD" ] && echo 是 || echo 否)"
