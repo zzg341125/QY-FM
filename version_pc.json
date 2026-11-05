@@ -1,0 +1,9 @@
+{
+  "versionCode": 200,
+  "versionName": "2.0.0",
+  "changelog": "1. 官方专线广播源集成与高品质线路默认优先\n2. 桌面迷你播放器模式 (自动置顶/贴边智能隐藏)\n3. 免 Key 本地声学指纹听歌识曲与歌手画报展示\n4. 内置流媒体电台录音与管理回放体系\n5. 全量个人资料备份与跨平台 (PC & Android) 互导\n6. 独立电源一键彻底退出与双窗口互斥托盘调度",
+  "downloadUrl": "https://gitee.com/app-finder/LX-FM-PC/releases/download/v2.0.0/LX_FM.exe",
+  "forceUpdate": false,
+  "releaseDate": "2026-10-28",
+  "fileSize": "18.1 MB"
+}

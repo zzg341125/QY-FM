@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">收音机</string>
+    <string name="on_air">ON AIR</string>
+    <string name="live_stream">LIVE BROADCAST</string>
+    <string name="station_radar">电台雷达</string>
+    <string name="station_studio">演播室</string>
+    <string name="favorites">我的收藏</string>
+    <string name="history">收听足迹</string>
+    <string name="sleep_timer">睡眠伴听</string>
+    <string name="car_mode">车载巡航</string>
+    <string name="record_audio">空中录音</string>
+    <string name="frequency_mhz">MHz</string>
+    <string name="channel_name">LX FM 播放服务</string>
+    <string name="channel_description">保持后台广播电台稳定播送</string>
+</resources>
