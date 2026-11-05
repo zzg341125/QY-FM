@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || secrets.KEYSTORE_B64 }}
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -54,24 +54,32 @@ jobs:
         id: sign
         if: env.KEYSTORE_BASE64 != ''
         run: |
+          echo "KEYSTORE_BASE64 长度: ${#KEYSTORE_BASE64}"
+          echo "开头 8 位: ${KEYSTORE_BASE64:0:8}"
+          echo "结尾 8 位: ${KEYSTORE_BASE64: -8}"
+          echo "KEYSTORE_PASSWORD 为空? $([ -z "$KEYSTORE_PASSWORD" ] && echo 是 || echo 否)"
+          echo "KEY_ALIAS: ${KEY_ALIAS:-<空>}"
           python3 - <<'PY'
-          import base64, os, pathlib
-          raw = ''.join(os.environ.get('KEYSTORE_BASE64', '').split())
+          import base64, os, pathlib, re
+          raw = os.environ.get('KEYSTORE_BASE64', '')
+          cleaned = re.sub(r'[^A-Za-z0-9+/=_-]', '', raw)
+          print('原始长度:', len(raw), '| 清洗后长度:', len(cleaned))
           ok = False
           try:
-              raw = raw.replace('-', '+').replace('_', '/')
-              raw += '=' * (-len(raw) % 4)
-              data = base64.b64decode(raw, validate=True)
+              s = cleaned.replace('-', '+').replace('_', '/')
+              s += '=' * (-len(s) % 4)
+              data = base64.b64decode(s, validate=True)
               head = data[:4]
+              print('解码字节数:', len(data), '| 文件头:', head.hex())
               if head == b'\xfe\xed\xfe\xed' or data[:1] == b'\x30':
                   pathlib.Path('keystore').mkdir(exist_ok=True)
                   pathlib.Path('keystore/release.keystore').write_bytes(data)
-                  print('keystore decoded bytes:', len(data))
                   ok = True
               else:
-                  print('unexpected keystore header:', head)
+                  print('文件头不是 JKS / PKCS12，可能不是 keystore 文件')
           except Exception as exc:
-              print('decode failed:', exc)
+              print('base64 解码失败:', exc)
+              print('前 40 个字符:', repr(raw[:40]))
           pathlib.Path('.sign_ok').write_text('1' if ok else '0')
           PY
           if [ "$(cat .sign_ok)" = "1" ]; then
