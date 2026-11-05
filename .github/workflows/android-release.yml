@@ -121,27 +121,33 @@ jobs:
           fi
           gradle assembleRelease --no-daemon --stacktrace $ARGS
 
-      - name: Show APK
+      - name: Verify APK signature
+        id: signstate
         run: |
-          ls -l app/build/outputs/apk/release/
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "APK: $APK"
+          ls -l app/build/outputs/apk/release/
           BT="$(ls -d ${ANDROID_SDK_ROOT}/build-tools/* | sort -V | tail -1)"
-          "$BT/apksigner" verify --print-certs "$APK" || true
+          if "$BT/apksigner" verify --print-certs "$APK" 2>&1 | tee apksigner.txt; then
+            echo "state=-signed" >> "$GITHUB_OUTPUT"
+            echo "::notice::APK 签名校验通过"
+            grep -m1 'certificate DN' apksigner.txt || true
+          else
+            echo "state=-unsigned" >> "$GITHUB_OUTPUT"
+            echo "::error::APK 未签名，装不上。请检查 KEYSTORE_BASE64（长度应为 3592）、KEYSTORE_PASSWORD、KEY_ALIAS、KEY_PASSWORD"
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: radio-apk-${{ github.run_number }}${{ steps.sign.outputs.suffix }}
+          name: radio-apk-${{ github.run_number }}${{ steps.signstate.outputs.state }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') && steps.sign.outputs.suffix == '-signed'
+        if: startsWith(github.ref, 'refs/tags/') && steps.signstate.outputs.state == '-signed'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
-
-      - name: Skip release (unsigned)
-        if: startsWith(github.ref, 'refs/tags/') && steps.sign.outputs.suffix != '-signed'
-        run: echo "::warning::未签名，已跳过 Release。请修复 KEYSTORE_BASE64 后重新 push tag"
