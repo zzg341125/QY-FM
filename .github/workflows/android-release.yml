@@ -105,19 +105,18 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
+          echo "code=$(date -u +%y%m%d%H)" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-            echo "code=$(date -u +%y%m%d%H)" >> "$GITHUB_OUTPUT"
           else
             echo "name=" >> "$GITHUB_OUTPUT"
-            echo "code=" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build release APK
         run: |
-          ARGS=""
+          ARGS="-PversionCode=${{ steps.ver.outputs.code }}"
           if [[ -n "${{ steps.ver.outputs.name }}" ]]; then
-            ARGS="-PversionName=${{ steps.ver.outputs.name }} -PversionCode=${{ steps.ver.outputs.code }}"
+            ARGS="$ARGS -PversionName=${{ steps.ver.outputs.name }}"
           fi
           gradle assembleRelease --no-daemon --stacktrace $ARGS
 
