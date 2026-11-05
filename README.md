@@ -70,7 +70,7 @@ keyPassword=你的key密码
 - push 形如 `v1.0.1` 的 tag：构建并自动创建 GitHub Release、附带 APK
 - 也可在 Actions 页面手动 `Run workflow`
 
-在仓库 **Settings → Secrets and variables → Actions** 添加：
+在仓库 **Settings → Secrets and variables → Actions** 的 **Secrets** 页签添加（放在 Variables 里也能被读到，但不推荐，Variables 是明文）：
 
 | Secret | 说明 |
 | --- | --- |
@@ -79,14 +79,23 @@ keyPassword=你的key密码
 | `KEY_ALIAS` | key 别名 |
 | `KEY_PASSWORD` | key 密码 |
 
+> 本仓库当前 keystore：2692 字节 → base64 应为 **3592 个字符**。如果 secret 长度不对，基本就是粘错了。
 > 换签名会导致已安装用户无法覆盖升级，请务必备份并长期使用同一份 keystore。
+
+构建产物会按签名结果命名：
+
+- `radio-apk-<run号>-signed`：已签名，可直接安装
+- `radio-apk-<run号>-unsigned`：未签名（secret 缺失或错误），产物不可安装，同时会在运行摘要里报错
 
 ## 发版流程
 
-1. 修改 `app/build.gradle.kts` 里的 `versionCode`（+1）与 `versionName`
-2. 提交并推送：`git commit -am "release: v1.0.1"` 然后 `git push`
+1. （可选）改 `app/build.gradle.kts` 里的 `versionName`；tag 构建会自动用 tag 名作为 `versionName`
+2. 提交：`git commit -am "release: v1.0.1"` 然后 `git push`
 3. 打标签：`git tag v1.0.1 && git push origin v1.0.1`
-4. Actions 自动产出 APK 并挂到 Release
+4. Actions 自动构建签名 APK 并创建 GitHub Release
+
+> `versionCode` 由 CI 自动生成（UTC `yyMMddHH`，例如 `25110615`），保证每次构建都递增、可以直接覆盖安装；
+> 本地手动构建仍用 `app/build.gradle.kts` 里的默认值，也可用 `-PversionCode=xxx -PversionName=x.y.z` 覆盖。
 
 ## 目录结构
 
