@@ -90,7 +90,7 @@ jobs:
             printf 'storeFile=../keystore/release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
               "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
             if keytool -list -keystore keystore/release.keystore -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
-              echo "suffix=" >> "$GITHUB_OUTPUT"
+              echo "suffix=-signed" >> "$GITHUB_OUTPUT"
               echo "keystore 校验通过，将输出已签名 APK"
             else
               echo "suffix=-unsigned" >> "$GITHUB_OUTPUT"
@@ -131,17 +131,17 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: radio-apk-${{ github.run_number }}${{ steps.sign.outputs.suffix || '-unsigned' }}
+          name: radio-apk-${{ github.run_number }}${{ steps.sign.outputs.suffix }}
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') && steps.sign.outputs.suffix != '-unsigned'
+        if: startsWith(github.ref, 'refs/tags/') && steps.sign.outputs.suffix == '-signed'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
 
       - name: Skip release (unsigned)
-        if: startsWith(github.ref, 'refs/tags/') && steps.sign.outputs.suffix == '-unsigned'
+        if: startsWith(github.ref, 'refs/tags/') && steps.sign.outputs.suffix != '-signed'
         run: echo "::warning::未签名，已跳过 Release。请修复 KEYSTORE_BASE64 后重新 push tag"
