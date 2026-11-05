@@ -9,9 +9,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
     env:
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -28,13 +33,19 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure Android SDK
+        run: |
+          # GitHub 的 ubuntu-22.04 镜像已内置 Android SDK（含 android-34 / build-tools 34.0.0）
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "sdk.dir=$SDK" > local.properties
+          echo "--- platforms ---"
+          ls "$SDK/platforms" || true
+          echo "--- build-tools ---"
+          ls "$SDK/build-tools" || true
 
-      - name: Install SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-      - name: Set up Gradle
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
@@ -46,15 +57,42 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore/release.keystore
           printf 'storeFile=../keystore/release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+          echo "签名配置已写入"
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "code=$(date -u +%y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=" >> "$GITHUB_OUTPUT"
+            echo "code=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          ARGS=""
+          if [[ -n "${{ steps.ver.outputs.name }}" ]]; then
+            ARGS="-PversionName=${{ steps.ver.outputs.name }} -PversionCode=${{ steps.ver.outputs.code }}"
+          fi
+          gradle assembleRelease --no-daemon --stacktrace $ARGS
+
+      - name: Verify signing
+        continue-on-error: true
+        run: |
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "APK = $APK"
+          BT="$(ls -d ${ANDROID_SDK_ROOT}/build-tools/* | sort -V | tail -1)"
+          "$BT/apksigner" verify --print-certs "$APK" \
+            || echo "::warning::APK 未签名（未配置 KEYSTORE_BASE64），无法直接安装"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: radio-apk
+          name: radio-apk-${{ github.run_number }}
           path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
