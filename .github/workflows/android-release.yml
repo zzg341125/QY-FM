@@ -95,7 +95,7 @@ jobs:
             fi
           else
             echo "suffix=-unsigned" >> "$GITHUB_OUTPUT"
-            echo "::warning::KEYSTORE_BASE64 无法解码，本次产出未签名 APK"
+            echo "::warning::KEYSTORE_BASE64 无法解码（长度 ${#KEYSTORE_BASE64}，开头 ${KEYSTORE_BASE64:0:8}，结尾 ${KEYSTORE_BASE64: -8}），本次产出未签名 APK"
           fi
 
       - name: Resolve version
