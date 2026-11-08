@@ -5,8 +5,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -141,6 +146,46 @@ class DragonRadioPlayer(private val context: Context) {
         }
     }
 
+    /** 蓝牙断开时是否由我们主动暂停（用于重连后自动续播） */
+    @Volatile
+    private var pausedByBluetooth = false
+
+    private val audioManager: AudioManager? =
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+    private fun AudioDeviceInfo.isBluetoothAudio(): Boolean {
+        return when (type) {
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> true
+            else -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                type == AudioDeviceInfo.TYPE_BLE_HEADSET || type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+            } else {
+                false
+            }
+        }
+    }
+
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+            if (!pauseOnHeadsetUnplug) return
+            if (removedDevices.none { it.isBluetoothAudio() }) return
+            val playing = exoPlayer.playWhenReady || _playerState.value.status == PlaybackStatus.PLAYING
+            if (playing) {
+                Log.i(TAG, "[Bluetooth] 蓝牙音频输出断开，自动暂停")
+                pausedByBluetooth = true
+                pause()
+            }
+        }
+
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
+            if (!pausedByBluetooth) return
+            if (addedDevices.none { it.isBluetoothAudio() }) return
+            Log.i(TAG, "[Bluetooth] 蓝牙已重连，自动继续播放")
+            pausedByBluetooth = false
+            play()
+        }
+    }
+
     init {
         setupPlayerListener()
         try {
@@ -149,6 +194,14 @@ class DragonRadioPlayer(private val context: Context) {
                 noisyReceiver,
                 IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
                 ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        } catch (_: Exception) {
+            // Ignore registration failures on restricted ROMs
+        }
+        try {
+            audioManager?.registerAudioDeviceCallback(
+                audioDeviceCallback,
+                Handler(Looper.getMainLooper())
             )
         } catch (_: Exception) {
             // Ignore registration failures on restricted ROMs
@@ -639,6 +692,7 @@ class DragonRadioPlayer(private val context: Context) {
 
     fun play() {
         cancelVolumeAnimation()
+        pausedByBluetooth = false
         DragonMediaSessionService.ensureRunning(context)
         if (exoPlayer.playbackState == Player.STATE_IDLE && _playerState.value.currentStation != null) {
             playStation(_playerState.value.currentStation!!)
@@ -722,6 +776,7 @@ class DragonRadioPlayer(private val context: Context) {
         warmUpJob?.cancel()
         warmUpJob = null
         activeStationId = null
+        pausedByBluetooth = false
 
         cancelVolumeAnimation()
         exoPlayer.volume = 0f
@@ -767,6 +822,10 @@ class DragonRadioPlayer(private val context: Context) {
 
     fun release() {
         stop()
+        try {
+            audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+        } catch (_: Exception) {
+        }
         exoPlayer.release()
     }
 }
