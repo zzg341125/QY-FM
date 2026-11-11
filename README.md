@@ -14,6 +14,8 @@
 - **添加到桌面**：为单个电台生成桌面快捷方式，点击直接开播
 - **睡眠定时**：长按底部播放条展开卡片，大按钮循环切换 `15 → 30 → 45 → 60 → 关闭`
 - **在线备份 (WebDAV)**：播放列表、设置、台标打包上传；每次上传生成带时间戳的新备份，可从云端列表选择任意一版恢复
+- **在线升级**：从 GitHub Releases 自动检查新版本并下载，也可在设置中手动检查；安装阶段由 Android 系统确认
+- **顺序恢复**：播放列表上下顺序独立持久化，WebDAV 备份包含显式顺序元数据，恢复后不会倒序或错位
 - **M3U 导入导出**：支持 `#EXTINF` 名称与 `tvg-logo` 台标
 - **主题**：多套内置配色，支持系统强调色 / 透明 UI
 - **稳定性**：HLS 直播缓冲优化、断流自愈、回到前台自动续播
@@ -92,7 +94,8 @@ keyPassword=你的key密码
 1. （可选）改 `app/build.gradle.kts` 里的 `versionName`；tag 构建会自动用 tag 名作为 `versionName`
 2. 提交：`git commit -am "release: v1.0.1"` 然后 `git push`
 3. 打标签：`git tag v1.0.1 && git push origin v1.0.1`
-4. Actions 自动构建签名 APK 并创建 GitHub Release
+4. Actions 自动构建签名 APK、生成 `version.json` 并创建 GitHub Release
+5. 已安装客户端通过 GitHub Releases 自动或手动升级
 
 > `versionCode` 由 CI 自动生成（UTC `yyMMddHH`，例如 `25110615`），保证每次构建都递增、可以直接覆盖安装；
 > 本地手动构建仍用 `app/build.gradle.kts` 里的默认值，也可用 `-PversionCode=xxx -PversionName=x.y.z` 覆盖。

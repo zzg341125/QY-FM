@@ -219,6 +219,13 @@ class FavoritesRepository(context: Context) {
         saveStations(KEY_CUSTOM_STATIONS, current)
     }
 
+    /** Replace the canonical playlist in-place, preserving the supplied order. */
+    fun replaceCustomStations(stations: List<RadioStation>) {
+        val ordered = stations.distinctBy { it.id }
+        _customStations.value = ordered
+        saveStations(KEY_CUSTOM_STATIONS, ordered)
+    }
+
     fun removeCustomStation(stationId: String) {
         val current = _customStations.value.toMutableList()
         current.removeAll { it.id == stationId }

@@ -4,6 +4,7 @@ import android.content.Context
 import com.dragon.fm.data.model.RadioStation
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedOutputStream
 import java.io.File
@@ -34,6 +35,7 @@ object BackupManager {
         "pref_fast_start",
         "pref_large_buffer",
         "pref_pause_on_unplug",
+        "pref_auto_update_enabled",
         "pref_webdav_url",
         "pref_webdav_user",
         "pref_webdav_file"
@@ -59,8 +61,9 @@ object BackupManager {
             if (!favicon.isNullOrBlank() && favicon.startsWith("/")) {
                 val logoFile = File(favicon)
                 if (logoFile.isFile) {
-                    val entryName = "logos/${index}_${logoFile.name}"
-                    logoEntries[favicon] = entryName
+                    val entryName = logoEntries.getOrPut(favicon) {
+                        "logos/${index}_${logoFile.name}"
+                    }
                     station.copy(favicon = "logo:${entryName.removePrefix("logos/")}")
                 } else {
                     station
@@ -76,6 +79,7 @@ object BackupManager {
                 put("version", "1.0.0")
                 put("createdAt", System.currentTimeMillis())
                 put("stationCount", stations.size)
+                put("stationOrder", JSONArray(backupStations.map { it.id }))
             }.toString())
 
             putText(zos, "playlist.json", json.encodeToString(backupStations))
@@ -105,7 +109,7 @@ object BackupManager {
         }.getOrElse { return RestoreResult(emptyList(), emptyMap()) }
 
         val logoDir = File(context.filesDir, "station_logos").apply { mkdirs() }
-        val restoredStations = stations.map { station ->
+        val restoredWithIcons = stations.map { station ->
             val favicon = station.favicon
             if (!favicon.isNullOrBlank() && favicon.startsWith("logo:")) {
                 val name = favicon.removePrefix("logo:")
@@ -121,6 +125,20 @@ object BackupManager {
                 station
             }
         }
+        val orderedIds = entries["manifest.json"]
+            ?.toString(Charsets.UTF_8)
+            ?.let { text ->
+                runCatching {
+                    val array = JSONObject(text).optJSONArray("stationOrder") ?: JSONArray()
+                    buildList {
+                        for (index in 0 until array.length()) {
+                            array.optString(index).takeIf { it.isNotBlank() }?.let(::add)
+                        }
+                    }
+                }.getOrDefault(emptyList())
+            }
+            .orEmpty()
+        val restoredStations = PlaylistOrderPolicy.apply(restoredWithIcons, orderedIds)
 
         val settings = entries["settings.json"]?.toString(Charsets.UTF_8)
             ?.let { runCatching { jsonToSettings(it) }.getOrDefault(emptyMap()) }

@@ -80,6 +80,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -210,7 +211,11 @@ fun SimpleHomeScreen(viewModel: MainViewModel) {
                     }
                 }
             }
-            itemsIndexed(playlist, key = { _, station -> station.id }) { index, station ->
+            itemsIndexed(
+                playlist,
+                key = { _, station -> station.id },
+                contentType = { _, _ -> "station" }
+            ) { index, station ->
                 val isEditing = editingStation?.id == station.id
                 val isDragging = draggingStationId == station.id
                 Column(
@@ -407,9 +412,10 @@ private fun HomeStationRow(
     val iconRequest = remember(iconModel, iconVersion) {
         ImageRequest.Builder(context)
             .data(iconModel)
+            .size(112, 112)
             .memoryCacheKey("${station.favicon}#$iconVersion")
             .diskCacheKey("${station.favicon}#$iconVersion")
-            .crossfade(true)
+            .crossfade(false)
             .build()
     }
 
@@ -491,6 +497,7 @@ private fun HomeStationRow(
                 model = iconRequest,
                 contentDescription = station.name,
                 contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.Low,
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape)

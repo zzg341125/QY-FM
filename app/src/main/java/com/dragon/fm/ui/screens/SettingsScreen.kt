@@ -125,6 +125,7 @@ fun SettingsScreen(
     val isFollowSystemTheme by viewModel.isFollowSystemTheme.collectAsState()
     val appBackground by viewModel.appBackground.collectAsState()
     val isAutoPlayOnLaunch by viewModel.isAutoPlayOnLaunch.collectAsState()
+    val autoUpdateEnabled by viewModel.autoUpdateEnabled.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val streamSourceMode by viewModel.streamSourceMode.collectAsState()
 
@@ -168,12 +169,12 @@ fun SettingsScreen(
         }
     }
 
-    val openGiteeRepo = {
+    val openGithubRepo = {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://gitee.com/app-finder/LX-FM"))
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/zzg341125/QY-FM"))
             context.startActivity(intent)
         } catch (_: Exception) {
-            Toast.makeText(context, "请在浏览器访问: https://gitee.com/app-finder/LX-FM", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "请在浏览器访问: https://github.com/zzg341125/QY-FM", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -835,7 +836,7 @@ fun SettingsScreen(
                 SettingsCard {
                     SettingsActionRow(
                         title = "检查新版本",
-                        subtitle = "当前版本: v${viewModel.currentVersionName} (Build ${viewModel.currentVersionCode}) · 自动同步 Gitee 发行版",
+                        subtitle = "当前版本: v${viewModel.currentVersionName} (Build ${viewModel.currentVersionCode}) · GitHub Releases",
                         actionLabel = if (updateCheckResult is UpdateCheckResult.Checking) "检查中..." else "检查更新",
                         actionColor = DragonTheme.primary,
                         onClick = {
@@ -843,12 +844,19 @@ fun SettingsScreen(
                         }
                     )
                     HorizontalDivider(color = DragonTheme.glassBorder, thickness = 0.5.dp)
+                    SettingsSwitchRow(
+                        title = "自动检查并下载更新",
+                        subtitle = "启动后自动检查并下载 GitHub 新版本；安装由 Android 系统确认",
+                        checked = autoUpdateEnabled,
+                        onCheckedChange = { viewModel.setAutoUpdateEnabled(it) }
+                    )
+                    HorizontalDivider(color = DragonTheme.glassBorder, thickness = 0.5.dp)
                     SettingsActionRow(
-                        title = "Gitee 开源项目",
-                        subtitle = "https://gitee.com/app-finder/LX-FM",
+                        title = "GitHub 开源项目",
+                        subtitle = "https://github.com/zzg341125/QY-FM",
                         actionLabel = "访问",
                         actionColor = DragonCyan,
-                        onClick = openGiteeRepo
+                        onClick = openGithubRepo
                     )
                 }
                 Spacer(modifier = Modifier.height(18.dp))

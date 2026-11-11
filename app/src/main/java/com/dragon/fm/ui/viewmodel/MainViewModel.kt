@@ -557,16 +557,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         refreshCacheSize()
 
-        // 极简版：启动时不再自动弹出更新提示，避免打断自动播放；
-        // 用户可在“设置 → 检查新版本”手动检测更新。
-        // viewModelScope.launch {
-        //     kotlinx.coroutines.delay(2500)
-        //     val res = updateManager.checkUpdate(isManual = false)
-        //     _updateCheckResult.value = res
-        //     if (res is UpdateCheckResult.HasUpdate) {
-        //         _showUpdateDialog.value = true
-        //     }
-        // }
+        scheduleAutomaticUpdateCheck()
 
         // Listen to music recognition results to sync Now Playing track & trigger floating banner / failure toasts
         viewModelScope.launch {
@@ -605,7 +596,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         prewarmExploreCache()
     }
 
-    // Gitee In-App Update Engine
+    // GitHub Releases in-app update engine
     val updateManager = AppUpdateManager(application)
 
     private val _updateCheckResult = MutableStateFlow<UpdateCheckResult>(UpdateCheckResult.Idle)
@@ -617,21 +608,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showUpdateDialog = MutableStateFlow(false)
     val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
 
+    private val _autoUpdateEnabled =
+        MutableStateFlow(prefs.getBoolean("pref_auto_update_enabled", true))
+    val autoUpdateEnabled: StateFlow<Boolean> = _autoUpdateEnabled.asStateFlow()
+
     val currentVersionName: String get() = updateManager.getCurrentVersionName()
     val currentVersionCode: Int get() = updateManager.getCurrentVersionCode()
 
+    fun setAutoUpdateEnabled(enabled: Boolean) {
+        _autoUpdateEnabled.value = enabled
+        prefs.edit().putBoolean("pref_auto_update_enabled", enabled).apply()
+        if (enabled) {
+            checkForUpdates(isManual = false)
+        }
+    }
+
+    private fun scheduleAutomaticUpdateCheck() {
+        viewModelScope.launch {
+            delay(2_500)
+            if (!_autoUpdateEnabled.value) return@launch
+            val now = System.currentTimeMillis()
+            val lastCheck = prefs.getLong("last_auto_update_check", 0L)
+            if (now - lastCheck < AUTO_UPDATE_CHECK_INTERVAL_MS) return@launch
+            prefs.edit().putLong("last_auto_update_check", now).apply()
+            checkForUpdates(isManual = false)
+        }
+    }
+
     fun checkForUpdates(isManual: Boolean = false) {
+        if (_updateCheckResult.value is UpdateCheckResult.Checking) return
         viewModelScope.launch {
             _updateCheckResult.value = UpdateCheckResult.Checking
             val result = updateManager.checkUpdate(isManual = isManual)
             _updateCheckResult.value = result
             if (result is UpdateCheckResult.HasUpdate) {
                 _showUpdateDialog.value = true
+                if (!isManual && _autoUpdateEnabled.value) {
+                    startDownloadUpdate(result.info)
+                }
             }
         }
     }
 
     fun startDownloadUpdate(info: AppUpdateInfo) {
+        if (_downloadState.value is DownloadState.Downloading) return
         viewModelScope.launch {
             _downloadState.value = DownloadState.Downloading(0f, 0L, 0L)
             val result = updateManager.downloadApk(info) { progress, cur, total ->
@@ -640,7 +660,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = { file ->
                     _downloadState.value = DownloadState.Completed(file)
-                    updateManager.installApk(file)
                 },
                 onFailure = { err ->
                     _downloadState.value = DownloadState.Error(err.message ?: "下载失败")
@@ -655,6 +674,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissUpdateDialog() {
         _showUpdateDialog.value = false
+    }
+
+    private companion object {
+        const val AUTO_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L
     }
 
     // Scenario Station Overrides & Customization (场景内电台收藏、删除与排序)
@@ -1546,6 +1569,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun reorderPlaylist(newList: List<RadioStation>) {
         _playlist.value = newList
+        favoritesRepo.replaceCustomStations(newList)
         val curStation = playerState.value.currentStation
         if (curStation != null) {
             val newIdx = newList.indexOfFirst { it.id == curStation.id }
@@ -2189,9 +2213,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             tags = "User Stream",
             frequencyMhz = 95.5f
         )
-        favoritesRepo.addCustomStation(station)
         // 极简版：新增电台固定插到列表最前并立即播放
-        _playlist.value = listOf(station) + _playlist.value.filter { it.id != station.id }
+        val updatedPlaylist = listOf(station) + _playlist.value.filter { it.id != station.id }
+        _playlist.value = updatedPlaylist
+        favoritesRepo.replaceCustomStations(updatedPlaylist)
         playStationAtIndex(0)
         updateSavedPlaylistIfMemoryEnabled()
     }
@@ -2334,7 +2359,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val updated = list[index].copy(favicon = target.absolutePath)
             list[index] = updated
             _playlist.value = list
-            favoritesRepo.addCustomStation(updated)
+            favoritesRepo.replaceCustomStations(list)
             updateSavedPlaylistIfMemoryEnabled()
             showToast("台标已更新")
         } catch (_: Exception) {
@@ -2387,10 +2412,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val added = favoritesRepo.applyCustomName(station)
-        favoritesRepo.addCustomStation(added)
         val newList = list.toMutableList()
         newList.add(0, added)
         _playlist.value = newList
+        favoritesRepo.replaceCustomStations(newList)
         updateSavedPlaylistIfMemoryEnabled()
         if (playNow) playStationAtIndex(0) else showToast("已添加：${added.name}")
     }
@@ -2401,9 +2426,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val index = list.indexOfFirst { it.id == stationId }
         if (index < 0) return
         val currentId = playerState.value.currentStation?.id
-        favoritesRepo.removeCustomStation(stationId)
         val newList = list.toMutableList().also { it.removeAt(index) }
         _playlist.value = newList
+        favoritesRepo.replaceCustomStations(newList)
         when {
             newList.isEmpty() -> {
                 _currentIndex.value = 0
@@ -2437,7 +2462,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
         list[index] = updated
         _playlist.value = list
-        favoritesRepo.addCustomStation(updated)
+        favoritesRepo.replaceCustomStations(list)
         favoritesRepo.setCustomStationName(stationId, name)
         if (playerState.value.currentStation?.id == stationId) {
             player.updateStationName(stationId, name)
@@ -2470,13 +2495,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 codec = "MP3",
                 bitrate = 128
             )
-            favoritesRepo.addCustomStation(station)
             added.add(station)
         }
 
         if (added.isNotEmpty()) {
             val addedIds = added.map { it.id }.toSet()
-            _playlist.value = added + _playlist.value.filter { it.id !in addedIds }
+            val updatedPlaylist = added + _playlist.value.filter { it.id !in addedIds }
+            _playlist.value = updatedPlaylist
+            favoritesRepo.replaceCustomStations(updatedPlaylist)
             updateSavedPlaylistIfMemoryEnabled()
         }
         return added.size
@@ -2497,8 +2523,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return -1
         }
         if (restored.isEmpty()) return 0
-        restored.forEach { favoritesRepo.addCustomStation(it) }
         _playlist.value = restored
+        favoritesRepo.replaceCustomStations(restored)
         playStationAtIndex(0)
         updateSavedPlaylistIfMemoryEnabled()
         return restored.size
@@ -2534,8 +2560,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun restoreBackupZip(zipFile: File): Int = withContext(Dispatchers.IO) {
         val result = BackupManager.restoreBackup(getApplication(), zipFile)
         withContext(Dispatchers.Main) {
-            result.stations.forEach { favoritesRepo.addCustomStation(it) }
             _playlist.value = result.stations
+            favoritesRepo.replaceCustomStations(result.stations)
             applyRestoredSettings(result.settings)
             if (result.stations.isNotEmpty()) {
                 if (_isAutoPlayOnLaunch.value) playStationAtIndex(0) else prepareStationAtIndex(0)
@@ -2567,6 +2593,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         bool("pref_fast_start")?.let { setFastStart(it) }
         bool("pref_large_buffer")?.let { setLargeBuffer(it) }
         bool("pref_pause_on_unplug")?.let { setPauseOnUnplug(it) }
+        bool("pref_auto_update_enabled")?.let { setAutoUpdateEnabled(it) }
 
         prefs.edit().apply {
             text("pref_webdav_url")?.let { putString("pref_webdav_url", it) }

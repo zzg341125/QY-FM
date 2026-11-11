@@ -1,6 +1,7 @@
 package com.dragon.fm.ui.screens
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -79,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import com.dragon.fm.data.api.WebDavManager
 import com.dragon.fm.data.model.PlaybackStatus
 import com.dragon.fm.data.model.RadioStation
+import com.dragon.fm.data.model.UpdateCheckResult
 import com.dragon.fm.ui.theme.ThemePreset
 import com.dragon.fm.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -111,6 +113,8 @@ fun SimpleSettingsScreen(
     val playbackMemory by viewModel.playbackMemory.collectAsState()
     val fastStart by viewModel.fastStart.collectAsState()
     val pauseOnUnplug by viewModel.pauseOnUnplug.collectAsState()
+    val autoUpdateEnabled by viewModel.autoUpdateEnabled.collectAsState()
+    val updateCheckResult by viewModel.updateCheckResult.collectAsState()
 
     val searchResults by viewModel.stationSearchResults.collectAsState()
     val isSearching by viewModel.isStationSearching.collectAsState()
@@ -123,6 +127,22 @@ fun SimpleSettingsScreen(
     var query by remember { mutableStateOf("") }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showWebDavDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(updateCheckResult) {
+        when (val result = updateCheckResult) {
+            is UpdateCheckResult.UpToDate -> if (result.isManual) {
+                Toast.makeText(
+                    context,
+                    "当前已是最新版本 (v${result.currentVersion})",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            is UpdateCheckResult.Error -> if (result.isManual) {
+                Toast.makeText(context, "检测更新失败：${result.message}", Toast.LENGTH_LONG).show()
+            }
+            else -> Unit
+        }
+    }
 
     LaunchedEffect(query) {
         if (query.isBlank()) {
@@ -352,7 +372,7 @@ fun SimpleSettingsScreen(
                 SettingsActionRow(
                     icon = Icons.Outlined.CloudUpload,
                     title = "在线备份 (WebDAV)",
-                    subtitle = "把播放列表、设置和台标备份到 WebDAV，并可从云端一键恢复。",
+                    subtitle = "备份播放列表、上下顺序、设置与台标；恢复后保持原顺序。",
                     colors = colors,
                     onClick = { showWebDavDialog = true }
                 )
@@ -417,11 +437,45 @@ fun SimpleSettingsScreen(
             item { SettingsSectionTitle("关于", colors) }
             item {
                 SettingsActionRow(
-                    icon = Icons.Outlined.Info,
-                    title = "程序版本",
-                    subtitle = "版本 ${viewModel.currentVersionName}",
+                    icon = Icons.Outlined.Restore,
+                    title = if (updateCheckResult is UpdateCheckResult.Checking) "正在检查更新" else "检查更新",
+                    subtitle = "当前版本 ${viewModel.currentVersionName} · GitHub Releases",
                     colors = colors,
-                    onClick = { }
+                    onClick = { viewModel.checkForUpdates(isManual = true) }
+                )
+            }
+            item {
+                SettingsSwitchRow(
+                    icon = Icons.Outlined.Info,
+                    title = "自动检查并下载更新",
+                    subtitle = "启动后自动检查 GitHub 新版本并下载，安装时由 Android 系统确认。",
+                    checked = autoUpdateEnabled,
+                    colors = colors,
+                    onCheckedChange = { viewModel.setAutoUpdateEnabled(it) }
+                )
+            }
+            item {
+                SettingsActionRow(
+                    icon = Icons.Outlined.Link,
+                    title = "GitHub 开源项目",
+                    subtitle = "github.com/zzg341125/QY-FM",
+                    colors = colors,
+                    onClick = {
+                        try {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/zzg341125/QY-FM")
+                                )
+                            )
+                        } catch (_: Exception) {
+                            Toast.makeText(
+                                context,
+                                "请在浏览器访问 github.com/zzg341125/QY-FM",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                 )
             }
             item { Spacer(modifier = Modifier.height(10.dp)) }
@@ -926,7 +980,7 @@ private fun WebDavBackupDialog(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "每次上传都会新增一个 ${fileName.trim().ifBlank { "quyang_backup" }}_日期_时间.zip，不会覆盖旧备份",
+                    text = "每次上传都会新增一个 ${fileName.trim().ifBlank { "quyang_backup" }}_日期_时间.zip，包含台标与电台顺序",
                     color = colors.textSecondary.copy(alpha = 0.75f),
                     fontSize = 11.sp
                 )
@@ -1014,7 +1068,7 @@ private fun WebDavBackupDialog(
                                     WebDavManager.uploadSmart(url, uploadName, user, password, bytes)
                                 }.fold(
                                     { usedUrl ->
-                                        "已备份 ${uploadName}（${bytes.size / 1024} KB）\n$usedUrl"
+                                        "已备份 ${viewModel.playlist.value.size} 个电台及台标（${bytes.size / 1024} KB）\n$usedUrl"
                                     },
                                     { "失败：${it.message}" }
                                 )

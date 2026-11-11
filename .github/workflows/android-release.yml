@@ -120,6 +120,29 @@ jobs:
           fi
           gradle assembleRelease --no-daemon --stacktrace $ARGS
 
+      - name: Generate release update metadata
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          VERSION_CODE: ${{ steps.ver.outputs.code }}
+          VERSION_NAME: ${{ steps.ver.outputs.name }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import datetime, json, os
+          metadata = {
+              "versionCode": int(os.environ["VERSION_CODE"]),
+              "versionName": os.environ["VERSION_NAME"],
+              "changelog": "QY-FM 自动升级版本。请查看 GitHub Release 说明了解本次更新内容。",
+              "downloadUrl": f"https://github.com/{os.environ['REPOSITORY']}/releases/download/{os.environ['RELEASE_TAG']}/app-release.apk",
+              "forceUpdate": False,
+              "releaseDate": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"),
+          }
+          with open("version.json", "w", encoding="utf-8") as f:
+              json.dump(metadata, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PY
+
       - name: Verify APK signature
         id: signstate
         run: |
@@ -148,5 +171,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && steps.signstate.outputs.state == '-signed'
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: |
+            app/build/outputs/apk/release/*.apk
+            version.json
           generate_release_notes: true

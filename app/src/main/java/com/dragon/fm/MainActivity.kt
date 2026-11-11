@@ -381,7 +381,7 @@ fun DragonAppContent(viewModel: MainViewModel) {
             )
         }
 
-        // Self-Update Dialog (Gitee Release/Version Auto-Update)
+        // Self-Update Dialog (GitHub Releases auto/manual update)
         if (showUpdateDialog && updateCheckResult is UpdateCheckResult.HasUpdate) {
             val updateInfo = (updateCheckResult as UpdateCheckResult.HasUpdate).info
             AppUpdateDialog(

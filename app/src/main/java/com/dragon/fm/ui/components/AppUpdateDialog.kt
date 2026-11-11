@@ -126,7 +126,7 @@ fun AppUpdateDialog(
                         }
 
                         Text(
-                            text = if (updateInfo.releaseDate.isNotBlank()) "发布于 ${updateInfo.releaseDate} · Gitee 官方发布" else "Gitee 官方开源同步更新",
+                            text = if (updateInfo.releaseDate.isNotBlank()) "发布于 ${updateInfo.releaseDate} · GitHub Release" else "GitHub 官方开源同步更新",
                             color = DragonTheme.textSecondary,
                             fontSize = 11.5.sp,
                             modifier = Modifier.padding(top = 2.dp)

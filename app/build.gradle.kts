@@ -26,8 +26,8 @@ android {
         applicationId = "com.dragon.fm"
         minSdk = 26
         targetSdk = 34
-        versionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull() ?: 10
-        versionName = project.findProperty("versionName")?.toString() ?: "1.0.0"
+        versionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull() ?: 12
+        versionName = project.findProperty("versionName")?.toString() ?: "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -145,4 +145,6 @@ dependencies {
     // Debugging
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    testImplementation("junit:junit:4.13.2")
 }
