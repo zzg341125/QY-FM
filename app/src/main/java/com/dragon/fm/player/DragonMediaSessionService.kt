@@ -415,17 +415,8 @@ class DragonMediaSessionService : MediaSessionService() {
             }
         }
 
-        fun requestNotificationUpdate(context: Context) {
-            if (instance == null) return
-            try {
-                context.startService(
-                    Intent(context, DragonMediaSessionService::class.java).apply {
-                        action = ACTION_UPDATE
-                    }
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to update notification: ${e.message}")
-            }
+        fun requestNotificationUpdate() {
+            instance?.updateNotification()
         }
 
         fun stopPlaybackAndService(context: Context) {

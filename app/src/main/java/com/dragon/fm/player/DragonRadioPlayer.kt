@@ -216,53 +216,65 @@ class DragonRadioPlayer(private val context: Context) {
             delay(BluetoothResumePolicy.RESUME_WINDOW_MS)
             if (!bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())) {
                 clearBluetoothResume()
-                DragonMediaSessionService.requestNotificationUpdate(context)
+                DragonMediaSessionService.requestNotificationUpdate()
             }
         }
     }
 
+    internal fun handleBluetoothDevicesRemoved(
+        removedDevices: Collection<BluetoothAudioDevice>,
+        nowMs: Long = SystemClock.elapsedRealtime(),
+    ) {
+        if (!pauseOnHeadsetUnplug || removedDevices.isEmpty()) return
+        if (isPlaybackActive()) {
+            Log.i(TAG, "[Bluetooth] 蓝牙音频输出断开，自动暂停")
+            bluetoothResumePolicy.rememberDisconnected(removedDevices, nowMs)
+            ensureBluetoothResumeTimeout()
+            pauseInternal(clearBluetoothResume = false)
+                DragonMediaSessionService.requestNotificationUpdate()
+        } else {
+            // ACTION_AUDIO_BECOMING_NOISY may arrive first and pause playback.
+            if (nowMs - lastAudioBecomingNoisyAtMs <= NOISY_CALLBACK_COALESCE_MS) {
+                bluetoothResumePolicy.rememberDisconnected(removedDevices, nowMs)
+            } else {
+                bluetoothResumePolicy.mergeDisconnected(removedDevices, nowMs)
+            }
+            ensureBluetoothResumeTimeout()
+            DragonMediaSessionService.requestNotificationUpdate()
+        }
+    }
+
+    internal fun handleBluetoothDevicesAdded(
+        addedDevices: Collection<BluetoothAudioDevice>,
+        nowMs: Long = SystemClock.elapsedRealtime(),
+    ): Boolean {
+        if (!pauseOnHeadsetUnplug) {
+            clearBluetoothResume()
+            return false
+        }
+        if (addedDevices.isEmpty()) return false
+        val shouldResume = bluetoothResumePolicy.consumeReconnect(addedDevices, nowMs)
+        if (!shouldResume) return false
+        Log.i(TAG, "[Bluetooth] 蓝牙已重新连接，自动继续播放")
+        play()
+        return true
+    }
+
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
-            if (!pauseOnHeadsetUnplug) return
-            val removedBluetoothDevices = removedDevices.filter { it.isBluetoothAudio() }
-            if (removedBluetoothDevices.isEmpty()) return
-            val resumeDevices = removedBluetoothDevices.map { it.toResumeDevice() }
-            if (isPlaybackActive()) {
-                Log.i(TAG, "[Bluetooth] 蓝牙音频输出断开，自动暂停")
-                bluetoothResumePolicy.rememberDisconnected(
-                    resumeDevices,
-                    SystemClock.elapsedRealtime()
-                )
-                ensureBluetoothResumeTimeout()
-                pauseInternal(clearBluetoothResume = false)
-                DragonMediaSessionService.requestNotificationUpdate(context)
-            } else {
-                // ACTION_AUDIO_BECOMING_NOISY may arrive first and pause playback.
-                val nowMs = SystemClock.elapsedRealtime()
-                if (nowMs - lastAudioBecomingNoisyAtMs <= NOISY_CALLBACK_COALESCE_MS) {
-                    bluetoothResumePolicy.rememberDisconnected(resumeDevices, nowMs)
-                } else {
-                    bluetoothResumePolicy.mergeDisconnected(resumeDevices, nowMs)
-                }
-                ensureBluetoothResumeTimeout()
-                DragonMediaSessionService.requestNotificationUpdate(context)
-            }
+            handleBluetoothDevicesRemoved(
+                removedDevices
+                    .filter { it.isBluetoothAudio() }
+                    .map { it.toResumeDevice() }
+            )
         }
 
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
-            if (!pauseOnHeadsetUnplug) {
-                clearBluetoothResume()
-                return
-            }
-            val addedBluetoothDevices = addedDevices.filter { it.isBluetoothAudio() }
-            if (addedBluetoothDevices.isEmpty()) return
-            val shouldResume = bluetoothResumePolicy.consumeReconnect(
-                addedBluetoothDevices.map { it.toResumeDevice() },
-                SystemClock.elapsedRealtime()
+            handleBluetoothDevicesAdded(
+                addedDevices
+                    .filter { it.isBluetoothAudio() }
+                    .map { it.toResumeDevice() }
             )
-            if (!shouldResume) return
-            Log.i(TAG, "[Bluetooth] 蓝牙已重连，自动继续播放")
-            play()
         }
     }
 

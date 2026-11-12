@@ -1,8 +1,8 @@
 {
-  "versionCode": 14,
-  "versionName": "1.0.4",
-  "changelog": "1. 同一蓝牙设备断连后 120 分钟内重新连接，自动继续播放\n2. 兼容蓝牙地址、设备 ID、音频协议与设备名称变化\n3. 锁屏或退到后台时保持前台媒体服务，蓝牙恢复后仍可自动续播\n4. 解锁时不会在蓝牙尚未恢复前提前播放",
-  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.4/app-release.apk",
+  "versionCode": 15,
+  "versionName": "1.0.5",
+  "changelog": "1. 修复应用退到后台后前台媒体服务掉级的问题\n2. 蓝牙断开后的 120 分钟等待期内持续保持媒体服务存活\n3. 已实测后台断开后暂停、重连后自动恢复播放\n4. 增加 Debug 构建专用蓝牙事件注入器，发布版不包含该测试入口",
+  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.5/app-release.apk",
   "forceUpdate": false,
   "releaseDate": "2026-11-12"
 }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name=".debug.BluetoothResumeDebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.dragon.fm.debug.BLUETOOTH_DISCONNECT" />
+                <action android:name="com.dragon.fm.debug.BLUETOOTH_RECONNECT" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>
