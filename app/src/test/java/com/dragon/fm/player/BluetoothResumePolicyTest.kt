@@ -12,11 +12,11 @@ class BluetoothResumePolicyTest {
         val headphones = BluetoothAudioDevice(id = 42, type = 8, productName = "Car Audio")
         val speaker = BluetoothAudioDevice(id = 77, type = 8, productName = "Kitchen Speaker")
 
-        policy.rememberDisconnected(listOf(headphones), nowMs = 1_000L)
+        policy.rememberDisconnected(listOf(headphones))
 
-        assertFalse(policy.consumeReconnect(listOf(speaker), nowMs = 2_000L))
-        assertTrue(policy.consumeReconnect(listOf(headphones), nowMs = 3_000L))
-        assertFalse(policy.consumeReconnect(listOf(headphones), nowMs = 4_000L))
+        assertFalse(policy.consumeReconnect(listOf(speaker)))
+        assertTrue(policy.consumeReconnect(listOf(headphones)))
+        assertFalse(policy.consumeReconnect(listOf(headphones)))
     }
 
     @Test
@@ -25,20 +25,41 @@ class BluetoothResumePolicyTest {
         val beforeReconnect = BluetoothAudioDevice(id = 1, type = 8, productName = "Car Audio")
         val afterReconnect = BluetoothAudioDevice(id = 2, type = 8, productName = "car audio")
 
-        policy.rememberDisconnected(listOf(beforeReconnect), nowMs = 1_000L)
+        policy.rememberDisconnected(listOf(beforeReconnect))
 
-        assertTrue(policy.consumeReconnect(listOf(afterReconnect), nowMs = 2_000L))
+        assertTrue(policy.consumeReconnect(listOf(afterReconnect)))
     }
 
     @Test
-    fun expiresAfterTheResumeWindow() {
-        val policy = BluetoothResumePolicy(resumeWindowMs = 5_000L)
+    fun resumesWhenReconnectUsesADifferentBluetoothProfile() {
+        val policy = BluetoothResumePolicy()
+        val a2dpCarAudio = BluetoothAudioDevice(id = 1, type = 8, productName = "Car Audio")
+        val scoCarAudio = BluetoothAudioDevice(id = 2, type = 7, productName = "Car Audio")
+
+        policy.rememberDisconnected(listOf(a2dpCarAudio))
+
+        assertTrue(policy.consumeReconnect(listOf(scoCarAudio)))
+    }
+
+    @Test
+    fun keepsResumePendingUntilTheUserConnectsBluetoothAgain() {
+        val policy = BluetoothResumePolicy()
         val headphones = BluetoothAudioDevice(id = 9, type = 8, productName = "Headphones")
 
-        policy.rememberDisconnected(listOf(headphones), nowMs = 1_000L)
+        policy.rememberDisconnected(listOf(headphones))
 
-        assertFalse(policy.consumeReconnect(listOf(headphones), nowMs = 6_001L))
-        assertFalse(policy.consumeReconnect(listOf(headphones), nowMs = 6_002L))
+        assertTrue(policy.consumeReconnect(listOf(headphones)))
+    }
+
+    @Test
+    fun resumesWhenReconnectHasNoStableDeviceIdentity() {
+        val policy = BluetoothResumePolicy()
+        val beforeReconnect = BluetoothAudioDevice(id = 3, type = 8, productName = "")
+        val afterReconnect = BluetoothAudioDevice(id = 19, type = 7, productName = "")
+
+        policy.rememberDisconnected(listOf(beforeReconnect))
+
+        assertTrue(policy.consumeReconnect(listOf(afterReconnect)))
     }
 
     @Test
@@ -46,9 +67,9 @@ class BluetoothResumePolicyTest {
         val policy = BluetoothResumePolicy()
         val headphones = BluetoothAudioDevice(id = 9, type = 8, productName = "Headphones")
 
-        policy.rememberDisconnected(listOf(headphones.copy(id = 10)), nowMs = 1_000L)
-        policy.mergeDisconnected(listOf(headphones), nowMs = 1_100L)
+        policy.rememberDisconnected(listOf(headphones.copy(id = 10)))
+        policy.mergeDisconnected(listOf(headphones))
 
-        assertTrue(policy.consumeReconnect(listOf(headphones), nowMs = 2_000L))
+        assertTrue(policy.consumeReconnect(listOf(headphones)))
     }
 }

@@ -1,8 +1,8 @@
 {
-  "versionCode": 12,
-  "versionName": "1.0.2",
-  "changelog": "1. 新增 GitHub Releases 在线升级：支持启动自动检查和手动检查，可自动下载新版 APK\n2. WebDAV 备份继续包含电台台标，并新增显式顺序元数据，恢复后保持原电台顺序\n3. 播放列表排序改为独立持久化，不再受播放进度记忆开关影响\n4. 优化首页电台列表滚动，减少台标解码与淡入动画带来的卡顿",
-  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.2/app-release.apk",
+  "versionCode": 13,
+  "versionName": "1.0.3",
+  "changelog": "1. 修复蓝牙断开后重新连接不能自动继续播放的问题\n2. 兼容重连时蓝牙音频协议切换、设备 ID 变化及设备名称缺失\n3. 取消过短的续播有效期，连接恢复后仍可自动继续播放",
+  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.3/app-release.apk",
   "forceUpdate": false,
   "releaseDate": "2026-11-12"
 }

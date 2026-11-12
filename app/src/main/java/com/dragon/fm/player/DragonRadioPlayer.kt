@@ -146,8 +146,7 @@ class DragonRadioPlayer(private val context: Context) {
                 val activeBluetoothDevices = bluetoothOutputDevices()
                 if (activeBluetoothDevices.isNotEmpty()) {
                     bluetoothResumePolicy.rememberDisconnected(
-                        activeBluetoothDevices.map { it.toResumeDevice() },
-                        lastAudioBecomingNoisyAtMs
+                        activeBluetoothDevices.map { it.toResumeDevice() }
                     )
                 }
                 pauseInternal(clearBluetoothResume = false)
@@ -202,17 +201,16 @@ class DragonRadioPlayer(private val context: Context) {
             if (isPlaybackActive()) {
                 Log.i(TAG, "[Bluetooth] 蓝牙音频输出断开，自动暂停")
                 bluetoothResumePolicy.rememberDisconnected(
-                    resumeDevices,
-                    SystemClock.elapsedRealtime()
+                    resumeDevices
                 )
                 pauseInternal(clearBluetoothResume = false)
             } else {
                 // ACTION_AUDIO_BECOMING_NOISY may arrive first and pause playback.
                 val nowMs = SystemClock.elapsedRealtime()
                 if (nowMs - lastAudioBecomingNoisyAtMs <= NOISY_CALLBACK_COALESCE_MS) {
-                    bluetoothResumePolicy.rememberDisconnected(resumeDevices, nowMs)
+                    bluetoothResumePolicy.rememberDisconnected(resumeDevices)
                 } else {
-                    bluetoothResumePolicy.mergeDisconnected(resumeDevices, nowMs)
+                    bluetoothResumePolicy.mergeDisconnected(resumeDevices)
                 }
             }
         }
@@ -225,8 +223,7 @@ class DragonRadioPlayer(private val context: Context) {
             val addedBluetoothDevices = addedDevices.filter { it.isBluetoothAudio() }
             if (addedBluetoothDevices.isEmpty()) return
             val shouldResume = bluetoothResumePolicy.consumeReconnect(
-                addedBluetoothDevices.map { it.toResumeDevice() },
-                SystemClock.elapsedRealtime()
+                addedBluetoothDevices.map { it.toResumeDevice() }
             )
             if (!shouldResume) return
             Log.i(TAG, "[Bluetooth] 蓝牙已重连，自动继续播放")
