@@ -137,6 +137,7 @@ class DragonRadioPlayer(private val context: Context) {
     private var activeStationId: String? = null
     private var playStartTimeMs: Long = 0L
     private var lastAudioBecomingNoisyAtMs: Long = 0L
+    private var bluetoothResumeTimeoutJob: Job? = null
 
     /** 拔出耳机 / 断开蓝牙时，根据设置决定是否自动暂停 */
     private val noisyReceiver = object : BroadcastReceiver() {
@@ -146,8 +147,10 @@ class DragonRadioPlayer(private val context: Context) {
                 val activeBluetoothDevices = bluetoothOutputDevices()
                 if (activeBluetoothDevices.isNotEmpty()) {
                     bluetoothResumePolicy.rememberDisconnected(
-                        activeBluetoothDevices.map { it.toResumeDevice() }
+                        activeBluetoothDevices.map { it.toResumeDevice() },
+                        lastAudioBecomingNoisyAtMs
                     )
+                    ensureBluetoothResumeTimeout()
                 }
                 pauseInternal(clearBluetoothResume = false)
             }
@@ -176,6 +179,11 @@ class DragonRadioPlayer(private val context: Context) {
         id = id,
         type = type,
         productName = productName.toString(),
+        address = try {
+            address.orEmpty()
+        } catch (_: Exception) {
+            ""
+        },
     )
 
     private fun bluetoothOutputDevices(): List<AudioDeviceInfo> {
@@ -192,6 +200,27 @@ class DragonRadioPlayer(private val context: Context) {
         return exoPlayer.playWhenReady || _playerState.value.status == PlaybackStatus.PLAYING
     }
 
+    fun isAwaitingBluetoothReconnect(): Boolean {
+        return bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())
+    }
+
+    private fun clearBluetoothResume() {
+        bluetoothResumeTimeoutJob?.cancel()
+        bluetoothResumeTimeoutJob = null
+        bluetoothResumePolicy.clear()
+    }
+
+    private fun ensureBluetoothResumeTimeout() {
+        if (bluetoothResumeTimeoutJob?.isActive == true) return
+        bluetoothResumeTimeoutJob = scope.launch {
+            delay(BluetoothResumePolicy.RESUME_WINDOW_MS)
+            if (!bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())) {
+                clearBluetoothResume()
+                DragonMediaSessionService.requestNotificationUpdate(context)
+            }
+        }
+    }
+
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
             if (!pauseOnHeadsetUnplug) return
@@ -201,29 +230,35 @@ class DragonRadioPlayer(private val context: Context) {
             if (isPlaybackActive()) {
                 Log.i(TAG, "[Bluetooth] 蓝牙音频输出断开，自动暂停")
                 bluetoothResumePolicy.rememberDisconnected(
-                    resumeDevices
+                    resumeDevices,
+                    SystemClock.elapsedRealtime()
                 )
+                ensureBluetoothResumeTimeout()
                 pauseInternal(clearBluetoothResume = false)
+                DragonMediaSessionService.requestNotificationUpdate(context)
             } else {
                 // ACTION_AUDIO_BECOMING_NOISY may arrive first and pause playback.
                 val nowMs = SystemClock.elapsedRealtime()
                 if (nowMs - lastAudioBecomingNoisyAtMs <= NOISY_CALLBACK_COALESCE_MS) {
-                    bluetoothResumePolicy.rememberDisconnected(resumeDevices)
+                    bluetoothResumePolicy.rememberDisconnected(resumeDevices, nowMs)
                 } else {
-                    bluetoothResumePolicy.mergeDisconnected(resumeDevices)
+                    bluetoothResumePolicy.mergeDisconnected(resumeDevices, nowMs)
                 }
+                ensureBluetoothResumeTimeout()
+                DragonMediaSessionService.requestNotificationUpdate(context)
             }
         }
 
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
             if (!pauseOnHeadsetUnplug) {
-                bluetoothResumePolicy.clear()
+                clearBluetoothResume()
                 return
             }
             val addedBluetoothDevices = addedDevices.filter { it.isBluetoothAudio() }
             if (addedBluetoothDevices.isEmpty()) return
             val shouldResume = bluetoothResumePolicy.consumeReconnect(
-                addedBluetoothDevices.map { it.toResumeDevice() }
+                addedBluetoothDevices.map { it.toResumeDevice() },
+                SystemClock.elapsedRealtime()
             )
             if (!shouldResume) return
             Log.i(TAG, "[Bluetooth] 蓝牙已重连，自动继续播放")
@@ -604,7 +639,7 @@ class DragonRadioPlayer(private val context: Context) {
         activeStationId = station.id
         if (!isRetry) {
             retryCount = 0
-            bluetoothResumePolicy.clear()
+            clearBluetoothResume()
         }
         playStartTimeMs = SystemClock.elapsedRealtime()
 
@@ -683,7 +718,7 @@ class DragonRadioPlayer(private val context: Context) {
     }
 
     fun prepareStation(station: RadioStation) {
-        bluetoothResumePolicy.clear()
+        clearBluetoothResume()
         retryJob?.cancel()
         retryJob = null
         timeoutWatchdogJob?.cancel()
@@ -740,7 +775,7 @@ class DragonRadioPlayer(private val context: Context) {
 
     fun play() {
         cancelVolumeAnimation()
-        bluetoothResumePolicy.clear()
+        clearBluetoothResume()
         DragonMediaSessionService.ensureRunning(context)
         if (exoPlayer.playbackState == Player.STATE_IDLE && _playerState.value.currentStation != null) {
             playStation(_playerState.value.currentStation!!)
@@ -761,7 +796,7 @@ class DragonRadioPlayer(private val context: Context) {
         retryJob?.cancel()
         retryJob = null
         if (clearBluetoothResume) {
-            bluetoothResumePolicy.clear()
+            clearBluetoothResume()
         }
 
         if (exoPlayer.playbackState == Player.STATE_READY && exoPlayer.volume > 0f) {
@@ -831,7 +866,7 @@ class DragonRadioPlayer(private val context: Context) {
         warmUpJob?.cancel()
         warmUpJob = null
         activeStationId = null
-        bluetoothResumePolicy.clear()
+        clearBluetoothResume()
 
         cancelVolumeAnimation()
         exoPlayer.volume = 0f
@@ -857,7 +892,7 @@ class DragonRadioPlayer(private val context: Context) {
 
     fun fadeOutAndPause(onComplete: () -> Unit = {}) {
         cancelVolumeAnimation()
-        bluetoothResumePolicy.clear()
+        clearBluetoothResume()
         val animator = ValueAnimator.ofFloat(exoPlayer.volume, 0.0f).apply {
             duration = 1500
             addUpdateListener {

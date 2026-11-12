@@ -1653,6 +1653,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** 从后台回到前台时，若之前是暂停状态则自动继续播放 */
     fun resumeIfPaused() {
+        if (player.isAwaitingBluetoothReconnect()) return
         val state = playerState.value
         if (state.currentStation != null && state.status == PlaybackStatus.PAUSED) {
             player.play()

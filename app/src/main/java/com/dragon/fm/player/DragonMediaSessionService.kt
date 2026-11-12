@@ -204,6 +204,7 @@ class DragonMediaSessionService : MediaSessionService() {
         }
         val isPlaying = playerState.status == PlaybackStatus.PLAYING
         val isBuffering = playerState.status == PlaybackStatus.BUFFERING
+        val awaitingBluetoothReconnect = app.radioPlayer.isAwaitingBluetoothReconnect()
         val station = playerState.currentStation ?: run {
             stopForeground(STOP_FOREGROUND_REMOVE)
             notificationManager?.cancel(NOTIFICATION_ID)
@@ -301,7 +302,7 @@ class DragonMediaSessionService : MediaSessionService() {
             .setDeleteIntent(stopIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
-            .setOngoing(isPlaying || isBuffering)
+            .setOngoing(isPlaying || isBuffering || awaitingBluetoothReconnect)
             .addAction(android.R.drawable.ic_media_previous, "上一台", prevIntent)
             .addAction(
                 if (isPlaying || isBuffering) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
@@ -318,7 +319,7 @@ class DragonMediaSessionService : MediaSessionService() {
 
         val notification = builder.build()
 
-        val isForegroundNeeded = isPlaying || isBuffering
+        val isForegroundNeeded = isPlaying || isBuffering || awaitingBluetoothReconnect
         try {
             if (isForegroundNeeded) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -347,7 +348,12 @@ class DragonMediaSessionService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         val app = applicationContext as? DragonFmApp
         val status = app?.radioPlayer?.playerState?.value?.status
-        if (status != PlaybackStatus.PLAYING && status != PlaybackStatus.BUFFERING) {
+        val awaitingBluetoothReconnect = app?.radioPlayer?.isAwaitingBluetoothReconnect() == true
+        if (
+            status != PlaybackStatus.PLAYING &&
+            status != PlaybackStatus.BUFFERING &&
+            !awaitingBluetoothReconnect
+        ) {
             stopPlaybackAndService(this)
         }
         super.onTaskRemoved(rootIntent)
@@ -406,6 +412,19 @@ class DragonMediaSessionService : MediaSessionService() {
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to ensure service running: ${e.message}")
                 }
+            }
+        }
+
+        fun requestNotificationUpdate(context: Context) {
+            if (instance == null) return
+            try {
+                context.startService(
+                    Intent(context, DragonMediaSessionService::class.java).apply {
+                        action = ACTION_UPDATE
+                    }
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update notification: ${e.message}")
             }
         }
 
