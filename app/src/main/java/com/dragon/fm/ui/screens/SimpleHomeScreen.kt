@@ -78,6 +78,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -184,7 +185,9 @@ fun SimpleHomeScreen(viewModel: MainViewModel) {
             .statusBarsPadding()
     ) {
         LazyColumn(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .clipToBounds(),
             state = listState
         ) {
             if (playlist.isEmpty()) {
@@ -221,9 +224,13 @@ fun SimpleHomeScreen(viewModel: MainViewModel) {
                 Column(
                     modifier = Modifier
                         .zIndex(if (isDragging) 1f else 0f)
-                        .graphicsLayer {
-                            translationY = if (isDragging) dragOffset else 0f
-                        }
+                        .then(
+                            if (isDragging) {
+                                Modifier.graphicsLayer { translationY = dragOffset }
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
                     HomeStationRow(
                         station = station,
@@ -232,6 +239,7 @@ fun SimpleHomeScreen(viewModel: MainViewModel) {
                         colors = colors,
                         iconVersion = iconVersion,
                         clickToPlay = clickStationToPlay,
+                        editEnabled = editStationEnabled,
                         onPlay = {
                             if (station.id == currentId) viewModel.togglePlayPause()
                             else viewModel.playStationAtIndex(index)
@@ -400,6 +408,7 @@ private fun HomeStationRow(
     colors: SimpleColors,
     iconVersion: Int,
     clickToPlay: Boolean,
+    editEnabled: Boolean,
     onPlay: () -> Unit,
     onLongPress: () -> Unit,
     onRequestDelete: () -> Unit,
@@ -419,40 +428,13 @@ private fun HomeStationRow(
             .build()
     }
 
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) onRequestDelete()
-            false
-        }
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        backgroundContent = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFE9B7B3)),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.RemoveCircle,
-                    contentDescription = "删除电台",
-                    tint = Color(0xFFB3261E),
-                    modifier = Modifier
-                        .padding(end = 28.dp)
-                        .size(26.dp)
-                )
-            }
-        }
-    ) {
+    val rowContent: @Composable () -> Unit = {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(100.dp)
                 .background(colors.background)
-                .pointerInput(station.id, clickToPlay) {
+                .pointerInput(station.id, clickToPlay, editEnabled) {
                     // 播放按钮区域（行尾约 76dp）交给按钮自身处理，避免点击重复触发
                     val buttonZoneStart = size.width - 76.dp.toPx()
                     awaitEachGesture {
@@ -465,6 +447,7 @@ private fun HomeStationRow(
                             if (!stillPressed && clickToPlay) onPlay()
                             return@awaitEachGesture
                         }
+                        if (!editEnabled) return@awaitEachGesture
                         // 长按后：原地松手 = 编辑；移动 = 拖动排序
                         var dragging = false
                         var accumulated = 0f
@@ -536,6 +519,40 @@ private fun HomeStationRow(
                 )
             }
         }
+    }
+
+    if (editEnabled) {
+        val dismissState = rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value == SwipeToDismissBoxValue.EndToStart) onRequestDelete()
+                false
+            }
+        )
+        SwipeToDismissBox(
+            state = dismissState,
+            enableDismissFromStartToEnd = false,
+            backgroundContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFE9B7B3)),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.RemoveCircle,
+                        contentDescription = "删除电台",
+                        tint = Color(0xFFB3261E),
+                        modifier = Modifier
+                            .padding(end = 28.dp)
+                            .size(26.dp)
+                    )
+                }
+            }
+        ) {
+            rowContent()
+        }
+    } else {
+        rowContent()
     }
 }
 

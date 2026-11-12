@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -99,8 +101,8 @@ fun SimpleSettingsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val playerState by viewModel.playerState.collectAsState()
     val playlist by viewModel.playlist.collectAsState()
+    val settingsListState = rememberLazyListState()
 
     val themeId by viewModel.simpleThemeId.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
@@ -118,7 +120,6 @@ fun SimpleSettingsScreen(
 
     val searchResults by viewModel.stationSearchResults.collectAsState()
     val isSearching by viewModel.isStationSearching.collectAsState()
-    val sleepRemaining by viewModel.sleepTimerSeconds.collectAsState()
 
     val preset = remember(themeId) { ThemePreset.fromId(themeId) }
     val colors = remember(preset) { simpleColors(preset) }
@@ -231,7 +232,12 @@ fun SimpleSettingsScreen(
             )
         }
 
-        LazyColumn(modifier = Modifier.weight(1f)) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .clipToBounds(),
+            state = settingsListState
+        ) {
             item {
                 SearchStationSection(
                     query = query,
@@ -405,7 +411,7 @@ fun SimpleSettingsScreen(
                 SettingsSwitchRow(
                     icon = Icons.Outlined.Edit,
                     title = "编辑电台",
-                    subtitle = "已启用电台信息编辑。长按进入编辑模式。",
+                    subtitle = "开启后可长按编辑、拖动排序或左滑删除；关闭后禁止这些操作。",
                     checked = editStationEnabled,
                     colors = colors,
                     onCheckedChange = { viewModel.setEditStationEnabled(it) }
@@ -481,26 +487,12 @@ fun SimpleSettingsScreen(
             item { Spacer(modifier = Modifier.height(10.dp)) }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.bottomBar)
-                .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            SimpleNowPlayingBar(
-                station = playlist.firstOrNull { it.id == playerState.currentStation?.id }
-                    ?: playerState.currentStation,
-                title = playerState.nowPlayingTitle.ifBlank {
-                    playerState.currentStation?.currentProgram.orEmpty()
-                },
-                isPlaying = playerState.status == PlaybackStatus.PLAYING,
-                colors = colors,
-                transparent = transparentUi,
-                sleepRemaining = sleepRemaining,
-                onTogglePlay = { viewModel.togglePlayPause() }
-            )
-        }
+        SimpleSettingsPlayerBar(
+            viewModel = viewModel,
+            playlist = playlist,
+            colors = colors,
+            transparentUi = transparentUi
+        )
     }
 
     if (showThemeDialog) {
@@ -574,6 +566,37 @@ fun SimpleSettingsScreen(
             viewModel = viewModel,
             colors = colors,
             onDismiss = { showWebDavDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun SimpleSettingsPlayerBar(
+    viewModel: MainViewModel,
+    playlist: List<RadioStation>,
+    colors: SimpleColors,
+    transparentUi: Boolean
+) {
+    val playerState by viewModel.playerState.collectAsState()
+    val sleepRemaining by viewModel.sleepTimerSeconds.collectAsState()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.bottomBar)
+            .navigationBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        SimpleNowPlayingBar(
+            station = playlist.firstOrNull { it.id == playerState.currentStation?.id }
+                ?: playerState.currentStation,
+            title = playerState.nowPlayingTitle.ifBlank {
+                playerState.currentStation?.currentProgram.orEmpty()
+            },
+            isPlaying = playerState.status == PlaybackStatus.PLAYING,
+            colors = colors,
+            transparent = transparentUi,
+            sleepRemaining = sleepRemaining,
+            onTogglePlay = { viewModel.togglePlayPause() }
         )
     }
 }
