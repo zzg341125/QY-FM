@@ -1,9 +1,14 @@
 package com.dragon.fm
 
+import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
@@ -34,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.dragon.fm.data.model.AppBackgroundType
 import com.dragon.fm.data.model.BackgroundPresets
@@ -64,6 +70,19 @@ enum class ScreenRoute {
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Toast.makeText(
+            this,
+            if (granted) {
+                "已授权蓝牙设备识别，重连续播可靠性已提升"
+            } else {
+                "未授权蓝牙设备识别，锁屏重连续播可能受限"
+            },
+            Toast.LENGTH_LONG
+        ).show()
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -83,6 +102,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestBluetoothPermissionIfNeeded()
 
         // 桌面快捷方式：直接播放对应电台
         handleShortcutIntent(intent)
@@ -186,6 +206,25 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun requestBluetoothPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val prefs = getSharedPreferences("dragon_fm_prefs", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("pref_pause_on_unplug", true)) return
+        if (
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        if (prefs.getBoolean("pref_bluetooth_permission_prompted", false)) return
+        prefs.edit().putBoolean("pref_bluetooth_permission_prompted", true).apply()
+        window.decorView.post {
+            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
         }
     }
 }

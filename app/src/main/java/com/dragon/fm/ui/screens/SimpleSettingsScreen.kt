@@ -1,8 +1,11 @@
 package com.dragon.fm.ui.screens
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,6 +82,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.dragon.fm.data.api.WebDavManager
 import com.dragon.fm.data.model.PlaybackStatus
 import com.dragon.fm.data.model.RadioStation
@@ -128,6 +132,25 @@ fun SimpleSettingsScreen(
     var query by remember { mutableStateOf("") }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showWebDavDialog by remember { mutableStateOf(false) }
+    var bluetoothPermissionGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        bluetoothPermissionGranted = granted
+        Toast.makeText(
+            context,
+            if (granted) "蓝牙设备识别权限已授权" else "蓝牙设备识别权限未授权",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 
     LaunchedEffect(updateCheckResult) {
         when (val result = updateCheckResult) {
@@ -429,13 +452,41 @@ fun SimpleSettingsScreen(
                 )
             }
             item {
+                SettingsActionRow(
+                    icon = Icons.Outlined.Link,
+                    title = "蓝牙设备识别权限",
+                    subtitle = if (bluetoothPermissionGranted) {
+                        "已授权，可在锁屏和后台识别同一蓝牙设备并自动续播。"
+                    } else {
+                        "未授权。请允许访问附近设备，以提高蓝牙重连续播可靠性。"
+                    },
+                    colors = colors,
+                    onClick = {
+                        if (bluetoothPermissionGranted) {
+                            Toast.makeText(context, "蓝牙设备识别权限已授权", Toast.LENGTH_SHORT).show()
+                        } else {
+                            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        }
+                    }
+                )
+            }
+            item {
                 SettingsSwitchRow(
                     icon = Icons.Outlined.Link,
                     title = "拔出耳机自动暂停",
                     subtitle = "拔出耳机或断开蓝牙时自动暂停播放，避免外放打扰。",
                     checked = pauseOnUnplug,
                     colors = colors,
-                    onCheckedChange = { viewModel.setPauseOnUnplug(it) }
+                    onCheckedChange = { enabled ->
+                        if (
+                            enabled &&
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                            !bluetoothPermissionGranted
+                        ) {
+                            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                        }
+                        viewModel.setPauseOnUnplug(enabled)
+                    }
                 )
             }
 

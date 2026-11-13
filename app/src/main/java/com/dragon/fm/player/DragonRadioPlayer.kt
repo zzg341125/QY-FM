@@ -1,10 +1,17 @@
 package com.dragon.fm.player
 
+import android.Manifest
 import android.animation.ValueAnimator
+import android.bluetooth.BluetoothA2dp
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -158,11 +165,60 @@ class DragonRadioPlayer(private val context: Context) {
         }
     }
 
+    private val bluetoothProfileReceiver = object : BroadcastReceiver() {
+        override fun onReceive(receiverContext: Context?, intent: Intent?) {
+            if (!pauseOnHeadsetUnplug || intent == null) return
+            val device = intent.bluetoothDeviceExtra() ?: return
+            val type = when (intent.action) {
+                BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED ->
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED ->
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                else -> return
+            }
+            val state = intent.getIntExtra(
+                BluetoothProfile.EXTRA_STATE,
+                BluetoothProfile.STATE_DISCONNECTED
+            )
+            val resumeDevice = device.toResumeDevice(type)
+            when (state) {
+                BluetoothProfile.STATE_CONNECTED -> {
+                    scope.launch {
+                        delay(400L)
+                        handleBluetoothDevicesAdded(listOf(resumeDevice))
+                    }
+                }
+                BluetoothProfile.STATE_DISCONNECTED -> {
+                    handleBluetoothDevicesRemoved(listOf(resumeDevice))
+                }
+            }
+        }
+    }
+
     /** 蓝牙断开时是否由我们主动暂停（用于重连后自动续播） */
     private val bluetoothResumePolicy = BluetoothResumePolicy()
 
     private val audioManager: AudioManager? =
         context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private val bluetoothAdapter: BluetoothAdapter? =
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager)?.adapter
+    private var a2dpProfile: BluetoothA2dp? = null
+    private var headsetProfile: BluetoothHeadset? = null
+    private val bluetoothProfileListener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            when (profile) {
+                BluetoothProfile.A2DP -> a2dpProfile = proxy as? BluetoothA2dp
+                BluetoothProfile.HEADSET -> headsetProfile = proxy as? BluetoothHeadset
+            }
+        }
+
+        override fun onServiceDisconnected(profile: Int) {
+            when (profile) {
+                BluetoothProfile.A2DP -> a2dpProfile = null
+                BluetoothProfile.HEADSET -> headsetProfile = null
+            }
+        }
+    }
 
     private fun AudioDeviceInfo.isBluetoothAudio(): Boolean {
         return when (type) {
@@ -187,6 +243,15 @@ class DragonRadioPlayer(private val context: Context) {
         },
     )
 
+    private fun Intent.bluetoothDeviceExtra(): BluetoothDevice? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        }
+    }
+
     private fun bluetoothOutputDevices(): List<AudioDeviceInfo> {
         return try {
             audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
@@ -194,6 +259,71 @@ class DragonRadioPlayer(private val context: Context) {
                 .orEmpty()
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    private fun hasBluetoothConnectPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun BluetoothDevice.toResumeDevice(type: Int): BluetoothAudioDevice {
+        if (!hasBluetoothConnectPermission()) {
+            return BluetoothAudioDevice(id = -1, type = type, productName = "")
+        }
+        val safeAddress = runCatching { address.orEmpty() }.getOrDefault("")
+        val safeName = runCatching { name.orEmpty() }.getOrDefault("")
+        return BluetoothAudioDevice(
+            id = if (safeAddress.isBlank()) -1 else safeAddress.hashCode(),
+            type = type,
+            productName = safeName,
+            address = safeAddress,
+        )
+    }
+
+    private fun ensureBluetoothProfileProxies() {
+        if (!hasBluetoothConnectPermission()) return
+        val adapter = bluetoothAdapter ?: return
+        if (a2dpProfile == null) {
+            runCatching { adapter.getProfileProxy(context, bluetoothProfileListener, BluetoothProfile.A2DP) }
+        }
+        if (headsetProfile == null) {
+            runCatching { adapter.getProfileProxy(context, bluetoothProfileListener, BluetoothProfile.HEADSET) }
+        }
+    }
+
+    private fun connectedBluetoothProfileDevices(): List<BluetoothAudioDevice> {
+        if (bluetoothAdapter == null || !hasBluetoothConnectPermission()) return emptyList()
+        ensureBluetoothProfileProxies()
+        return try {
+            buildList {
+                a2dpProfile?.connectedDevices.orEmpty().forEach { device ->
+                    add(device.toResumeDevice(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP))
+                }
+                headsetProfile?.connectedDevices.orEmpty().forEach { device ->
+                    add(device.toResumeDevice(AudioDeviceInfo.TYPE_BLUETOOTH_SCO))
+                }
+            }.distinctBy { it.deviceKey() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun currentBluetoothResumeDevices(): List<BluetoothAudioDevice> {
+        debugBluetoothResumeDevices?.let { return it }
+        return (bluetoothOutputDevices().map { it.toResumeDevice() } + connectedBluetoothProfileDevices())
+            .distinctBy { it.deviceKey() }
+    }
+
+    private fun BluetoothAudioDevice.deviceKey(): String {
+        return when {
+            address.isNotBlank() -> "address:$address"
+            productName.isNotBlank() -> "name:$type:$productName"
+            id >= 0 -> "id:$id"
+            else -> "type:$type"
         }
     }
 
@@ -317,6 +447,19 @@ class DragonRadioPlayer(private val context: Context) {
             )
         } catch (_: Exception) {
             // Ignore registration failures on restricted ROMs
+        }
+        try {
+            ContextCompat.registerReceiver(
+                context,
+                bluetoothProfileReceiver,
+                IntentFilter().apply {
+                    addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+                    addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
+                },
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        } catch (_: Exception) {
+            // Bluetooth profile broadcasts may require nearby-device permission.
         }
         try {
             audioManager?.registerAudioDeviceCallback(
@@ -954,7 +1097,16 @@ class DragonRadioPlayer(private val context: Context) {
     fun release() {
         stop()
         try {
+            context.unregisterReceiver(bluetoothProfileReceiver)
+        } catch (_: Exception) {
+        }
+        try {
             audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+        } catch (_: Exception) {
+        }
+        try {
+            a2dpProfile?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.A2DP, it) }
+            headsetProfile?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HEADSET, it) }
         } catch (_: Exception) {
         }
         exoPlayer.release()

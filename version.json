@@ -1,8 +1,8 @@
 {
-  "versionCode": 17,
-  "versionName": "1.0.7",
-  "changelog": "1. 新增蓝牙重连轮询兜底，兼容锁屏和后台时不发送设备回调的手机\n2. 保留系统蓝牙回调，同时低频读取当前音频输出，提升自动续播可靠性\n3. 蓝牙断开后 120 分钟内检测到同一设备输出恢复即自动播放\n4. 已实测后台状态下仅依赖轮询即可从暂停恢复播放",
-  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.7/app-release.apk",
+  "versionCode": 18,
+  "versionName": "1.0.8",
+  "changelog": "1. 针对鸿蒙兼容层新增蓝牙附近设备权限，使用稳定蓝牙地址识别同一设备\n2. 新增 A2DP 与 HEADSET 系统蓝牙连接广播监听\n3. 新增蓝牙 Profile 连接状态轮询，不再只依赖 AudioManager\n4. 保留音频设备回调与低频轮询兜底，提高锁屏和后台重连续播可靠性",
+  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.8/app-release.apk",
   "forceUpdate": false,
   "releaseDate": "2026-11-12"
 }
