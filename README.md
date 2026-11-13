@@ -5,6 +5,8 @@
 > 基于开源项目 **LX-FM**（Apache-2.0）修改，首页交互参考 **Transistor**。
 > 完整许可见 [LICENSE](LICENSE)。
 
+> HarmonyOS 原生 ArkTS/ArkUI 版位于 [`harmony/`](harmony/README.md)，使用独立的 `harmony-v*` 标签发布，不替换本 README 描述的 Android APK。
+
 ## 功能
 
 - **首页播放列表**：台标 + 台名 + 圆形播放/停止按钮，无标题栏干扰

@@ -1,0 +1,13 @@
+/node_modules/
+/.hvigor/
+/.idea/
+/build/
+**/build/
+*.hap
+*.hsp
+*.har
+*.p12
+*.cer
+*.p7b
+*.csr
+local.properties

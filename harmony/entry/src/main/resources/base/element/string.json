@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "QY·FM"
+    },
+    {
+      "name": "reason_bluetooth",
+      "value": "用于识别同一蓝牙设备并在重新连接后自动续播"
+    },
+    {
+      "name": "reason_background",
+      "value": "用于锁屏和后台持续播放网络电台"
+    }
+  ]
+}
