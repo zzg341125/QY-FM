@@ -11,20 +11,11 @@ export interface WebDavConfig {
   fileName: string;
 }
 
-class WebDavHeaders {
+interface WebDavHeaders {
   'Authorization'?: string;
   'Content-Type': string;
   'User-Agent': string;
   'Overwrite': string;
-
-  constructor(contentType: string, user: string, password: string) {
-    this['Content-Type'] = contentType;
-    this['User-Agent'] = USER_AGENT;
-    this['Overwrite'] = 'T';
-    if (user.length > 0) {
-      this['Authorization'] = `Basic ${encodeBasicCredentials(user, password)}`;
-    }
-  }
 }
 
 function normalizeFileName(fileName: string): string {
@@ -48,7 +39,19 @@ export function buildBackupUrl(config: WebDavConfig): string {
 }
 
 function buildHeaders(config: WebDavConfig, contentType: string): WebDavHeaders {
-  return new WebDavHeaders(contentType, config.user, config.password);
+  if (config.user.length > 0) {
+    return {
+      'Authorization': `Basic ${encodeBasicCredentials(config.user, config.password)}`,
+      'Content-Type': contentType,
+      'User-Agent': USER_AGENT,
+      'Overwrite': 'T'
+    };
+  }
+  return {
+    'Content-Type': contentType,
+    'User-Agent': USER_AGENT,
+    'Overwrite': 'T'
+  };
 }
 
 function describeHttpFailure(code: number, prefix: string): Error {

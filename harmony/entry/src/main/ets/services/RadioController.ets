@@ -42,6 +42,7 @@ export class RadioController {
   private statusText: string = '选择电台后开始播放';
   private diagnostics: string = '蓝牙监听尚未启动';
   private isPlaying: boolean = false;
+  private pausedByUser: boolean = true;
   private sleepTimerMinutes: number = 0;
   private sleepTimer: number = -1;
   private backgroundTasks: BackgroundTaskService = new BackgroundTaskService();
@@ -131,6 +132,7 @@ export class RadioController {
       this.sleepTimerMinutes = 0;
     }
     this.waitingForBluetooth = false;
+    this.pausedByUser = false;
     this.bluetooth.cancelPending();
     await this.silentKeepAlive.stop();
     this.currentStation = station;
@@ -177,6 +179,7 @@ export class RadioController {
     }
     try {
       this.waitingForBluetooth = false;
+      this.pausedByUser = false;
       await this.silentKeepAlive.stop();
       await player.play();
       this.statusText = reason;
@@ -190,6 +193,7 @@ export class RadioController {
 
   async pause(reason: string, manual: boolean): Promise<void> {
     if (manual) {
+      this.pausedByUser = true;
       this.bluetooth.cancelPending();
       this.bluetooth.setPlaybackActive(false);
       await this.silentKeepAlive.stop();
@@ -212,6 +216,7 @@ export class RadioController {
   }
 
   async stop(): Promise<void> {
+    this.pausedByUser = true;
     this.bluetooth.cancelPending();
     this.bluetooth.setPlaybackActive(false);
     await this.silentKeepAlive.stop();
@@ -231,6 +236,18 @@ export class RadioController {
     this.waitingForBluetooth = false;
     this.statusText = '已停止';
     this.notify();
+  }
+
+  async resumeIfPausedAfterForeground(): Promise<void> {
+    if (
+      !this.pausedByUser &&
+      !this.waitingForBluetooth &&
+      this.currentStation !== undefined &&
+      this.player !== undefined &&
+      this.player.state === 'paused'
+    ) {
+      await this.resume('返回前台，继续播放');
+    }
   }
 
   setSleepTimer(minutes: number): void {
@@ -292,6 +309,12 @@ export class RadioController {
         usage: audio.StreamUsage.STREAM_USAGE_MUSIC,
         rendererFlags: 0
       };
+      const strategy: media.PlaybackStrategy = {
+        preferredBufferDuration: this.settings.largeBuffer ? 20 : 3,
+        preferredBufferDurationForPlaying: this.settings.fastStart ? 0.25 : 1,
+        thresholdForAutoQuickPlay: 5
+      };
+      player.setPlaybackStrategy(strategy);
       await player.prepare();
     } else if (state === 'prepared') {
       await player.play();
@@ -360,6 +383,11 @@ export class RadioController {
 
   private async handleBluetoothLost(deviceId: string): Promise<void> {
     if (!this.settings.autoResume || this.currentStation === undefined || !this.isPlaying) {
+      return;
+    }
+    if (!this.settings.pauseOnUnplug) {
+      this.statusText = '蓝牙已断开，继续通过扬声器播放';
+      this.notify();
       return;
     }
     await this.pause('蓝牙已断开，等待同一设备重连', false);

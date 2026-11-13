@@ -16,6 +16,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { RadioController } from '../services/RadioController';
 
 const DOMAIN = 0x0000;
 
@@ -54,6 +55,9 @@ export default class EntryAbility extends UIAbility {
   onForeground(): void {
     // Ability has brought to foreground
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
+    RadioController.getInstance().resumeIfPausedAfterForeground().catch((err: Error) => {
+      hilog.error(DOMAIN, 'testTag', 'Failed to resume after foreground. Cause: %{public}s', err.message);
+    });
   }
 
   onBackground(): void {

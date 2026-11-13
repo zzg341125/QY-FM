@@ -13,6 +13,18 @@ export interface AppSettings {
   autoUpdate: boolean;
   autoResume: boolean;
   resumeWindowMinutes: number;
+  editMode: boolean;
+  editStreamUrl: boolean;
+  themeId: string;
+  dynamicColor: boolean;
+  transparentUi: boolean;
+  clickStationToPlay: boolean;
+  autoPlayOnLaunch: boolean;
+  playbackMemory: boolean;
+  fastStart: boolean;
+  largeBuffer: boolean;
+  pauseOnUnplug: boolean;
+  lastStationId: string;
   webdavUrl: string;
   webdavUser: string;
   webdavPassword: string;
@@ -33,6 +45,18 @@ export interface PortableSettings {
   autoUpdate: boolean;
   autoResume: boolean;
   resumeWindowMinutes: number;
+  editMode: boolean;
+  editStreamUrl: boolean;
+  themeId: string;
+  dynamicColor: boolean;
+  transparentUi: boolean;
+  clickStationToPlay: boolean;
+  autoPlayOnLaunch: boolean;
+  playbackMemory: boolean;
+  fastStart: boolean;
+  largeBuffer: boolean;
+  pauseOnUnplug: boolean;
+  lastStationId: string;
   webdavUrl: string;
   webdavUser: string;
   webdavFile: string;
@@ -48,6 +72,18 @@ export function createDefaultSettings(): AppSettings {
     autoUpdate: true,
     autoResume: true,
     resumeWindowMinutes: 120,
+    editMode: true,
+    editStreamUrl: true,
+    themeId: 'lunar_light',
+    dynamicColor: true,
+    transparentUi: false,
+    clickStationToPlay: true,
+    autoPlayOnLaunch: true,
+    playbackMemory: true,
+    fastStart: true,
+    largeBuffer: false,
+    pauseOnUnplug: true,
+    lastStationId: '',
     webdavUrl: '',
     webdavUser: '',
     webdavPassword: '',
@@ -73,6 +109,18 @@ export function copySettings(settings: AppSettings): AppSettings {
     autoUpdate: settings.autoUpdate,
     autoResume: settings.autoResume,
     resumeWindowMinutes: settings.resumeWindowMinutes,
+    editMode: settings.editMode,
+    editStreamUrl: settings.editStreamUrl,
+    themeId: settings.themeId,
+    dynamicColor: settings.dynamicColor,
+    transparentUi: settings.transparentUi,
+    clickStationToPlay: settings.clickStationToPlay,
+    autoPlayOnLaunch: settings.autoPlayOnLaunch,
+    playbackMemory: settings.playbackMemory,
+    fastStart: settings.fastStart,
+    largeBuffer: settings.largeBuffer,
+    pauseOnUnplug: settings.pauseOnUnplug,
+    lastStationId: settings.lastStationId,
     webdavUrl: settings.webdavUrl,
     webdavUser: settings.webdavUser,
     webdavPassword: settings.webdavPassword,

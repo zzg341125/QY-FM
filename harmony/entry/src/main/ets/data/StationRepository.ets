@@ -81,6 +81,18 @@ export class StationRepository {
         autoUpdate: parsed.autoUpdate ?? defaults.autoUpdate,
         autoResume: parsed.autoResume ?? defaults.autoResume,
         resumeWindowMinutes: parsed.resumeWindowMinutes ?? defaults.resumeWindowMinutes,
+        editMode: parsed.editMode ?? defaults.editMode,
+        editStreamUrl: parsed.editStreamUrl ?? defaults.editStreamUrl,
+        themeId: parsed.themeId ?? defaults.themeId,
+        dynamicColor: parsed.dynamicColor ?? defaults.dynamicColor,
+        transparentUi: parsed.transparentUi ?? defaults.transparentUi,
+        clickStationToPlay: parsed.clickStationToPlay ?? defaults.clickStationToPlay,
+        autoPlayOnLaunch: parsed.autoPlayOnLaunch ?? defaults.autoPlayOnLaunch,
+        playbackMemory: parsed.playbackMemory ?? defaults.playbackMemory,
+        fastStart: parsed.fastStart ?? defaults.fastStart,
+        largeBuffer: parsed.largeBuffer ?? defaults.largeBuffer,
+        pauseOnUnplug: parsed.pauseOnUnplug ?? defaults.pauseOnUnplug,
+        lastStationId: parsed.lastStationId ?? defaults.lastStationId,
         webdavUrl: parsed.webdavUrl ?? defaults.webdavUrl,
         webdavUser: parsed.webdavUser ?? defaults.webdavUser,
         webdavPassword: parsed.webdavPassword ?? defaults.webdavPassword,
@@ -105,6 +117,18 @@ export class StationRepository {
       autoUpdate: settings.autoUpdate,
       autoResume: settings.autoResume,
       resumeWindowMinutes: settings.resumeWindowMinutes,
+      editMode: settings.editMode,
+      editStreamUrl: settings.editStreamUrl,
+      themeId: settings.themeId,
+      dynamicColor: settings.dynamicColor,
+      transparentUi: settings.transparentUi,
+      clickStationToPlay: settings.clickStationToPlay,
+      autoPlayOnLaunch: settings.autoPlayOnLaunch,
+      playbackMemory: settings.playbackMemory,
+      fastStart: settings.fastStart,
+      largeBuffer: settings.largeBuffer,
+      pauseOnUnplug: settings.pauseOnUnplug,
+      lastStationId: settings.lastStationId,
       webdavUrl: settings.webdavUrl,
       webdavUser: settings.webdavUser,
       webdavFile: settings.webdavFile
@@ -151,12 +175,27 @@ export class StationRepository {
 
     const defaultSettings = createDefaultSettings();
     if (backup.settings !== undefined) {
-      defaultSettings.autoUpdate = backup.settings.autoUpdate;
-      defaultSettings.autoResume = backup.settings.autoResume;
-      defaultSettings.resumeWindowMinutes = backup.settings.resumeWindowMinutes;
-      defaultSettings.webdavUrl = backup.settings.webdavUrl;
-      defaultSettings.webdavUser = backup.settings.webdavUser;
-      defaultSettings.webdavFile = backup.settings.webdavFile;
+      defaultSettings.autoUpdate = backup.settings.autoUpdate ?? defaultSettings.autoUpdate;
+      defaultSettings.autoResume = backup.settings.autoResume ?? defaultSettings.autoResume;
+      defaultSettings.resumeWindowMinutes =
+        backup.settings.resumeWindowMinutes ?? defaultSettings.resumeWindowMinutes;
+      defaultSettings.editMode = backup.settings.editMode ?? defaultSettings.editMode;
+      defaultSettings.editStreamUrl = backup.settings.editStreamUrl ?? defaultSettings.editStreamUrl;
+      defaultSettings.themeId = backup.settings.themeId ?? defaultSettings.themeId;
+      defaultSettings.dynamicColor = backup.settings.dynamicColor ?? defaultSettings.dynamicColor;
+      defaultSettings.transparentUi = backup.settings.transparentUi ?? defaultSettings.transparentUi;
+      defaultSettings.clickStationToPlay =
+        backup.settings.clickStationToPlay ?? defaultSettings.clickStationToPlay;
+      defaultSettings.autoPlayOnLaunch =
+        backup.settings.autoPlayOnLaunch ?? defaultSettings.autoPlayOnLaunch;
+      defaultSettings.playbackMemory = backup.settings.playbackMemory ?? defaultSettings.playbackMemory;
+      defaultSettings.fastStart = backup.settings.fastStart ?? defaultSettings.fastStart;
+      defaultSettings.largeBuffer = backup.settings.largeBuffer ?? defaultSettings.largeBuffer;
+      defaultSettings.pauseOnUnplug = backup.settings.pauseOnUnplug ?? defaultSettings.pauseOnUnplug;
+      defaultSettings.lastStationId = backup.settings.lastStationId ?? defaultSettings.lastStationId;
+      defaultSettings.webdavUrl = backup.settings.webdavUrl ?? defaultSettings.webdavUrl;
+      defaultSettings.webdavUser = backup.settings.webdavUser ?? defaultSettings.webdavUser;
+      defaultSettings.webdavFile = backup.settings.webdavFile ?? defaultSettings.webdavFile;
     }
     return {
       stations: ordered,

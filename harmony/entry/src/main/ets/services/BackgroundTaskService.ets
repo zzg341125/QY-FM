@@ -50,7 +50,7 @@ export class BackgroundTaskService {
     const taskId = this.continuousTaskId;
     this.continuousTaskId = -1;
     try {
-      await backgroundTaskManager.stopBackgroundRunning(context, taskId);
+      backgroundTaskManager.stopBackgroundRunning(context, taskId);
     } catch (error) {
       const businessError = error as BusinessError;
       console.error(`后台播放任务停止失败: ${businessError.code} ${businessError.message}`);

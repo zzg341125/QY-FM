@@ -16,15 +16,17 @@
 | 静音保持 | `entry/src/main/ets/services/SilentAudioKeepAlive.ets` | 断开等待期间维持音频任务有效 |
 | WebDAV | `entry/src/main/ets/services/WebDavBackupService.ets` | Basic Auth、PUT 上传、GET 恢复 |
 | 在线升级 | `entry/src/main/ets/services/AppUpdateService.ets` | `harmony-v*` GitHub Release 与 AppGallery 更新 |
+| 本地文件 | `entry/src/main/ets/services/LocalFileService.ets` | M3U 和 JSON 的选择、读取与保存 |
+| 电台搜索 | `entry/src/main/ets/services/StationSearchService.ets` | 内置电台和 Radio Browser 在线搜索 |
 
 ## 蓝牙续播规则
 
-1. 用户手动开始播放，且 A2DP 设备处于连接状态时，记录当前设备地址。
+1. 用户开始播放，且 A2DP 设备处于连接状态时，记录当前设备地址。
 2. 当前设备断开或音频输出回落到扬声器时，立即暂停真实电台。
 3. 保存断开设备身份与时间戳，开始静音音频保持流。
 4. 只有同一设备地址重新进入 `STATE_CONNECTED` 且间隔不超过 120 分钟才续播。
 5. 手动暂停、停止、切换电台、睡眠定时停止都会取消待续播状态。
-6. 正常启动应用不会自动播放；只有断连前正在播放的同一蓝牙设备重连才触发。
+6. 普通启动是否播放由“启动时自动播放”设置控制；蓝牙重连续播只接受断开前正在播放的同一设备。
 
 设备地址使用 HarmonyOS 返回的虚拟 MAC。文档说明已配对设备在蓝牙开关不重启时地址保持稳定，适合本次重连窗口。
 
@@ -64,6 +66,10 @@ WebDAV 保存 `application/json` 文件，`schemaVersion` 为 `2`：
     "autoUpdate": true,
     "autoResume": true,
     "resumeWindowMinutes": 120,
+    "editMode": true,
+    "themeId": "lunar_light",
+    "autoPlayOnLaunch": true,
+    "playbackMemory": true,
     "webdavUrl": "https://dav.example/radio/",
     "webdavUser": "user",
     "webdavFile": "qyfm-backup.json"
@@ -85,7 +91,7 @@ WebDAV 保存 `application/json` 文件，`schemaVersion` 为 `2`：
 
 设备：HUAWEI Mate 80 Pro Max，HarmonyOS `7.0.0.111 SP12`。
 
-1. 正常启动应用，确认没有自动播放。
+1. 检查“启动时自动播放”开关，分别验证开启和关闭时的启动行为。
 2. 连接蓝牙耳机，播放电台，确认 A2DP 状态写入诊断信息。
 3. 锁屏，关闭蓝牙耳机。
 4. 确认电台暂停，应用显示“等待同一设备重连”。
@@ -98,10 +104,23 @@ WebDAV 保存 `application/json` 文件，`schemaVersion` 为 `2`：
 11. 关闭编辑模式左滑，确认不出现删除按钮；打开编辑模式后确认可以删除。
 12. 在播放页和设置页连续上下滑动，确认无明显掉帧和卡顿。
 
-## 发布前仍需完成
+## v1.0.8 兼容说明
 
-- 安装 DevEco Studio/Command Line Tools 与 API 23 SDK。
-- 完成 ArkTS 编译和 Code Linter。
-- 使用华为账号生成 HAP 签名。
-- 在真机执行上面的蓝牙锁屏验收。
-- 生成 `QYFM-harmony-v1.0.0.hap`，创建 `harmony-v1.0.0` Release。
+可见的 `v1.0.8` 极简版功能均已迁移到 ArkUI。Android 的“将单个电台创建为桌面快捷方式”依赖 Android 专属 ShortcutManager；HarmonyOS 三方应用目前只能声明安装时定义的静态快捷方式，不能按任意电台动态创建桌面快捷方式，因此该项没有伪造等价入口。应用本身的桌面图标已使用 `v1.0.8` 原始资源。
+
+| v1.0.8 功能 | HarmonyOS 原生实现 |
+| --- | --- |
+| 首页平铺电台列表、圆形台标、圆形播放键 | 已按原版布局和尺寸重做 |
+| 电台搜索、新增、长按编辑、拖动排序、左滑删除确认 | 已实现 |
+| 点击整行播放开关 | 已实现；关闭后仍可点行尾播放键 |
+| 启动自动播放、最后电台记忆 | 已实现 |
+| 主题、动态强调色、透明播放条 | 已实现主题与强调色切换 |
+| 睡眠定时 15/30/45/60 分钟 | 已对应到实现中 |
+| M3U / M3U8 导入、导出与台标 | 已实现 |
+| 本地 JSON 备份/恢复 | 已实现 |
+| WebDAV 备份/恢复、台标与顺序 | 已实现 |
+| 极速起播与更大缓冲 | 已映射到 AVPlayer 播放策略 |
+| 编辑电台、编辑流地址权限 | 已实现 |
+| 蓝牙设备识别、断开暂停、120 分钟重续播 | 原生 A2DP 实现并完成锁屏真机验证 |
+| 自动/手动更新、GitHub、版本信息 | 已实现 |
+| 安装后的 App 图标 | 与 `v1.0.8` PNG SHA-1 完全一致 |
