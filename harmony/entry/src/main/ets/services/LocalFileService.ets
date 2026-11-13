@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { util } from '@kit.ArkTS';
 
 export class LocalFileService {
   async pickText(context: common.UIAbilityContext, suffixFilter: string): Promise<string> {
@@ -15,7 +16,14 @@ export class LocalFileService {
     try {
       const file = fileIo.openSync(uris[0], fileIo.OpenMode.READ_ONLY);
       try {
-        return fileIo.readTextSync(uris[0]);
+        const size = fileIo.statSync(file.fd).size;
+        if (size <= 0) {
+          return '';
+        }
+        const buffer = new ArrayBuffer(size);
+        const bytesRead = fileIo.readSync(file.fd, buffer);
+        return util.TextDecoder.create('utf-8')
+          .decodeToString(new Uint8Array(buffer.slice(0, bytesRead)));
       } finally {
         fileIo.closeSync(file);
       }

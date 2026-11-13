@@ -36,6 +36,9 @@ struct Index {
   @State showWebDav: boolean = false;
   @State showTheme: boolean = false;
   @State pendingDelete: Station | undefined = undefined;
+  @State swipedStationId: string = '';
+  @State swipingStationId: string = '';
+  @State stationSwipeDistance: number = 0;
   @State searchQuery: string = '';
   @State searchResults: Station[] = [];
   @State searching: boolean = false;
@@ -128,6 +131,20 @@ struct Index {
       await this.repository.saveSettings(settings);
     }
     await this.radio.playStation(station);
+  }
+
+  private activateStation(station: Station): void {
+    if (this.swipedStationId.length > 0) {
+      this.swipedStationId = '';
+      return;
+    }
+    if (this.settings.clickStationToPlay) {
+      if (this.currentStation?.id === station.id) {
+        this.togglePlayback();
+      } else {
+        this.playStation(station);
+      }
+    }
   }
 
   private async togglePlayback(): Promise<void> {
@@ -374,7 +391,66 @@ struct Index {
     const settings = copySettings(this.settings);
     settings.editMode = value;
     this.settings = settings;
+    if (!value) {
+      this.closeStationSwipe();
+    }
     this.persistSettings();
+  }
+
+  private beginStationSwipe(stationId: string): void {
+    if (!this.settings.editMode) {
+      return;
+    }
+    if (this.swipedStationId.length > 0 && this.swipedStationId !== stationId) {
+      this.swipedStationId = '';
+    }
+    this.swipingStationId = stationId;
+    this.stationSwipeDistance = 0;
+  }
+
+  private updateStationSwipe(stationId: string, offset: number): void {
+    if (!this.settings.editMode) {
+      return;
+    }
+    this.swipingStationId = stationId;
+    this.stationSwipeDistance = Math.max(-88, Math.min(0, offset));
+    if (this.stationSwipeDistance <= -32) {
+      this.swipedStationId = stationId;
+    }
+  }
+
+  private finishStationSwipe(stationId: string, offset: number): void {
+    if (!this.settings.editMode) {
+      this.closeStationSwipe();
+      return;
+    }
+    const finalOffset = Math.min(offset, this.stationSwipeDistance);
+    this.swipedStationId = finalOffset <= -32 ? stationId : '';
+    this.swipingStationId = '';
+    this.stationSwipeDistance = 0;
+  }
+
+  private cancelStationSwipe(): void {
+    this.swipingStationId = '';
+    this.stationSwipeDistance = 0;
+  }
+
+  private closeStationSwipe(): void {
+    this.swipedStationId = '';
+    this.cancelStationSwipe();
+  }
+
+  private stationSwipeOffset(stationId: string): number {
+    if (!this.settings.editMode) {
+      return 0;
+    }
+    if (this.swipedStationId === stationId) {
+      return -88;
+    }
+    if (this.swipingStationId === stationId) {
+      return this.stationSwipeDistance;
+    }
+    return 0;
   }
 
   private updateAutoUpdate(value: boolean): void {
@@ -598,6 +674,37 @@ struct Index {
     return this.settings.dynamicColor ? this.palette.primary : '#56698C';
   }
 
+  private settingValue(key: string): boolean {
+    switch (key) {
+      case 'dynamicColor':
+        return this.settings.dynamicColor;
+      case 'transparentUi':
+        return this.settings.transparentUi;
+      case 'clickStation':
+        return this.settings.clickStationToPlay;
+      case 'autoPlay':
+        return this.settings.autoPlayOnLaunch;
+      case 'playbackMemory':
+        return this.settings.playbackMemory;
+      case 'fastStart':
+        return this.settings.fastStart;
+      case 'largeBuffer':
+        return this.settings.largeBuffer;
+      case 'editMode':
+        return this.settings.editMode;
+      case 'editStreamUrl':
+        return this.settings.editStreamUrl;
+      case 'pauseOnUnplug':
+        return this.settings.pauseOnUnplug;
+      case 'autoResume':
+        return this.settings.autoResume;
+      case 'autoUpdate':
+        return this.settings.autoUpdate;
+      default:
+        return false;
+    }
+  }
+
   private updateSettingSwitch(key: string, value: boolean): void {
     switch (key) {
       case 'dynamicColor':
@@ -761,23 +868,6 @@ struct Index {
     .height(100)
     .padding({ left: 16, right: 16 })
     .backgroundColor(this.palette.background)
-    .onClick(() => {
-      if (this.settings.clickStationToPlay) {
-        if (this.currentStation?.id === station.id) {
-          this.togglePlayback();
-        } else {
-          this.playStation(station);
-        }
-      }
-    })
-    .gesture(
-      LongPressGesture()
-        .onAction(() => {
-          if (this.settings.editMode) {
-            this.openStationEditor(station);
-          }
-        })
-    )
   }
 
   @Builder
@@ -789,6 +879,37 @@ struct Index {
         .color(this.palette.divider)
         .margin({ left: 16, right: 16 })
     }
+  }
+
+  @Builder
+  SwipeableStationItem(station: Station, index: number) {
+    Stack({ alignContent: Alignment.End }) {
+      if (this.settings.editMode && this.swipedStationId === station.id) {
+        this.StationDeleteAction(station.id)
+      }
+      Column() {
+        this.StationListItemContent(station, index)
+      }
+      .width('100%')
+      .translate({ x: this.stationSwipeOffset(station.id) })
+    }
+    .width('100%')
+    .clip(true)
+    .gesture(
+      PanGesture({ direction: PanDirection.Horizontal, distance: 10 })
+        .onActionStart(() => {
+          this.beginStationSwipe(station.id);
+        })
+        .onActionUpdate((event: GestureEvent) => {
+          this.updateStationSwipe(station.id, event.offsetX);
+        })
+        .onActionEnd((event: GestureEvent) => {
+          this.finishStationSwipe(station.id, event.offsetX);
+        })
+        .onActionCancel(() => {
+          this.cancelStationSwipe();
+        })
+    )
   }
 
   @Builder
@@ -940,22 +1061,21 @@ struct Index {
     Column() {
       List() {
         ForEach(this.stations, (station: Station, index: number) => {
-          if (this.settings.editMode) {
-            ListItem() {
-              this.StationListItemContent(station, index)
-            }
-            .swipeAction({
-              end: {
-                builder: () => {
-                  this.StationDeleteAction(station.id)
-                }
-              }
-            })
-          } else {
-            ListItem() {
-              this.StationListItemContent(station, index)
-            }
+          ListItem() {
+            this.SwipeableStationItem(station, index)
           }
+          .onClick(() => {
+            this.activateStation(station);
+          })
+          .parallelGesture(
+            LongPressGesture()
+              .onAction(() => {
+                if (this.settings.editMode) {
+                  this.closeStationSwipe();
+                  this.openStationEditor(station);
+                }
+              })
+          )
         }, (station: Station) => station.id)
           .onMove((from: number, to: number) => {
             this.moveStationByIndex(from, to);
@@ -1000,7 +1120,7 @@ struct Index {
   }
 
   @Builder
-  SettingsSwitchRow(icon: string, title: string, subtitle: string, checked: boolean, key: string) {
+  SettingsSwitchRow(icon: string, title: string, subtitle: string, key: string) {
     Row({ space: 16 }) {
       Text(icon)
         .width(36)
@@ -1011,14 +1131,20 @@ struct Index {
           .fontSize(19)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.palette.textPrimary)
+          .onClick(() => {
+            this.updateSettingSwitch(key, !this.settingValue(key));
+          })
         Text(subtitle)
           .fontSize(15)
           .fontColor(this.palette.textSecondary)
           .lineHeight(21)
+          .onClick(() => {
+            this.updateSettingSwitch(key, !this.settingValue(key));
+          })
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      Toggle({ type: ToggleType.Switch, isOn: checked })
+      Toggle({ type: ToggleType.Switch, isOn: this.settingValue(key) })
         .selectedColor(this.primaryColor())
         .onChange((value: boolean) => {
           this.updateSettingSwitch(key, value);
@@ -1052,6 +1178,33 @@ struct Index {
     .padding({ left: 20, right: 20, top: 14, bottom: 14 })
     .onClick(() => {
       this.runSettingAction(action);
+    })
+  }
+
+  @Builder
+  ThemeSettingsRow() {
+    Row({ space: 16 }) {
+      Text('◈')
+        .width(36)
+        .fontSize(21)
+        .fontColor(this.palette.textPrimary)
+      Column({ space: 4 }) {
+        Text('应用主题')
+          .fontSize(19)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.palette.textPrimary)
+        Text(`当前主题：${this.palette.title}`)
+          .fontSize(15)
+          .fontColor(this.palette.textSecondary)
+          .lineHeight(21)
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .padding({ left: 20, right: 20, top: 14, bottom: 14 })
+    .onClick(() => {
+      this.runSettingAction('theme');
     })
   }
 
@@ -1137,21 +1290,21 @@ struct Index {
         ListItem() {
           this.SettingsSectionTitle('常规')
         }
-        ListItem() { this.SettingsActionRow('◈', '应用主题', `当前主题：${this.palette.title}`, 'theme') }
+        ListItem() { this.ThemeSettingsRow() }
         ListItem() {
-          this.SettingsSwitchRow('◉', '动态颜色', '用户界面元素使用当前主题强调色。', this.settings.dynamicColor, 'dynamicColor')
+          this.SettingsSwitchRow('◉', '动态颜色', '用户界面元素使用当前主题强调色。', 'dynamicColor')
         }
         ListItem() {
-          this.SettingsSwitchRow('◐', '用户界面透明效果', '播放控件采用半透明背景。', this.settings.transparentUi, 'transparentUi')
+          this.SettingsSwitchRow('◐', '用户界面透明效果', '播放控件采用半透明背景。', 'transparentUi')
         }
         ListItem() {
-          this.SettingsSwitchRow('▶', '点击广播电台', '点击电台任意部位开始收听。', this.settings.clickStationToPlay, 'clickStation')
+          this.SettingsSwitchRow('▶', '点击广播电台', '点击电台任意部位开始收听。', 'clickStation')
         }
         ListItem() {
-          this.SettingsSwitchRow('◎', '启动时自动播放', '打开应用后自动播放上次收听的电台。', this.settings.autoPlayOnLaunch, 'autoPlay')
+          this.SettingsSwitchRow('◎', '启动时自动播放', '打开应用后自动播放上次收听的电台。', 'autoPlay')
         }
         ListItem() {
-          this.SettingsSwitchRow('↺', '记忆播放列表与进度', '保存当前列表和最后收听的电台。', this.settings.playbackMemory, 'playbackMemory')
+          this.SettingsSwitchRow('↺', '记忆播放列表与进度', '保存当前列表和最后收听的电台。', 'playbackMemory')
         }
         ListItem() {
           this.SettingsDivider()
@@ -1174,25 +1327,25 @@ struct Index {
           this.SettingsSectionTitle('高级')
         }
         ListItem() {
-          this.SettingsSwitchRow('ϟ', '0.25s 极速起播优化', '使用快速起播缓冲，重启应用后生效。', this.settings.fastStart, 'fastStart')
+          this.SettingsSwitchRow('ϟ', '0.25s 极速起播优化', '使用快速起播缓冲，重启应用后生效。', 'fastStart')
         }
         ListItem() {
-          this.SettingsSwitchRow('▤', '使用更大缓冲', '使用更大的直播缓冲，重启应用后生效。', this.settings.largeBuffer, 'largeBuffer')
+          this.SettingsSwitchRow('▤', '使用更大缓冲', '使用更大的直播缓冲，重启应用后生效。', 'largeBuffer')
         }
         ListItem() {
-          this.SettingsSwitchRow('✎', '编辑电台', '开启后可长按编辑、拖动排序或左滑删除。', this.settings.editMode, 'editMode')
+          this.SettingsSwitchRow('✎', '编辑电台', '开启后可长按编辑、拖动排序或左滑删除。', 'editMode')
         }
         ListItem() {
-          this.SettingsSwitchRow('↗', '编辑流媒体链接', '允许在编辑电台时修改流媒体链接。', this.settings.editStreamUrl, 'editStreamUrl')
+          this.SettingsSwitchRow('↗', '编辑流媒体链接', '允许在编辑电台时修改流媒体链接。', 'editStreamUrl')
         }
         ListItem() {
           this.SettingsActionRow('⌁', '蓝牙设备识别权限', this.diagnostics, 'bluetoothPermission')
         }
         ListItem() {
-          this.SettingsSwitchRow('⇄', '拔出耳机自动暂停', '耳机或蓝牙断开时自动暂停，避免外放。', this.settings.pauseOnUnplug, 'pauseOnUnplug')
+          this.SettingsSwitchRow('⇄', '拔出耳机自动暂停', '耳机或蓝牙断开时自动暂停，避免外放。', 'pauseOnUnplug')
         }
         ListItem() {
-          this.SettingsSwitchRow('✓', '蓝牙重连自动续播', '同一设备 120 分钟内重连时自动续播。', this.settings.autoResume, 'autoResume')
+          this.SettingsSwitchRow('✓', '蓝牙重连自动续播', '同一设备 120 分钟内重连时自动续播。', 'autoResume')
         }
         ListItem() {
           this.SettingsDivider()
@@ -1202,7 +1355,7 @@ struct Index {
         }
         ListItem() { this.SettingsActionRow('↻', '检查更新', '当前版本 1.0.0 · GitHub Releases', 'checkUpdate') }
         ListItem() {
-          this.SettingsSwitchRow('⟳', '自动检查并下载更新', '启动后自动检查新版本，安装由系统确认。', this.settings.autoUpdate, 'autoUpdate')
+          this.SettingsSwitchRow('⟳', '自动检查并下载更新', '启动后自动检查新版本，安装由系统确认。', 'autoUpdate')
         }
         ListItem() { this.SettingsActionRow('⌘', 'GitHub 开源项目', 'github.com/zzg341125/QY-FM', 'github') }
         if (this.settingsStatus.length > 0) {
@@ -1623,6 +1776,22 @@ struct Index {
           })
       }
       .width('100%')
+      if (!this.editorIsNew && this.settings.editMode) {
+        Button('删除电台')
+          .width('100%')
+          .height(42)
+          .fontSize(15)
+          .fontColor(COLOR_DANGER)
+          .backgroundColor(COLOR_DANGER_BG)
+          .borderRadius(21)
+          .onClick(() => {
+            const station = this.stations.find((item: Station) => item.id === this.editorId);
+            if (station !== undefined) {
+              this.showEditor = false;
+              this.pendingDelete = station;
+            }
+          })
+      }
     }
     .width('92%')
     .padding(18)
