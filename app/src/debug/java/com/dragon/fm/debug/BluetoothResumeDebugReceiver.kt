@@ -21,8 +21,13 @@ class BluetoothResumeDebugReceiver : BroadcastReceiver() {
             address = DEBUG_DEVICE_ADDRESS,
         )
         when (intent.action) {
-            ACTION_DISCONNECT -> app.radioPlayer.handleBluetoothDevicesRemoved(listOf(device))
-            ACTION_RECONNECT -> app.radioPlayer.handleBluetoothDevicesAdded(listOf(device))
+            ACTION_DISCONNECT -> {
+                app.radioPlayer.setDebugBluetoothResumeDevices(emptyList())
+                app.radioPlayer.handleBluetoothDevicesRemoved(listOf(device))
+            }
+            ACTION_RECONNECT -> {
+                app.radioPlayer.setDebugBluetoothResumeDevices(listOf(device))
+            }
             else -> return
         }
         Log.i(TAG, "Simulated Bluetooth event: ${intent.action}")

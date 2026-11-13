@@ -1,8 +1,8 @@
 {
-  "versionCode": 16,
-  "versionName": "1.0.6",
-  "changelog": "1. 关闭“编辑电台”后，播放页面左滑不再出现删除按钮或删除确认\n2. 开启“编辑电台”后恢复正常左滑删除、长按编辑和拖动排序\n3. 优化播放页面纵向滚动，减少无效图层与删除手势开销\n4. 优化设置页面纵向滚动，隔离播放状态更新并裁剪列表绘制区域",
-  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.6/app-release.apk",
+  "versionCode": 17,
+  "versionName": "1.0.7",
+  "changelog": "1. 新增蓝牙重连轮询兜底，兼容锁屏和后台时不发送设备回调的手机\n2. 保留系统蓝牙回调，同时低频读取当前音频输出，提升自动续播可靠性\n3. 蓝牙断开后 120 分钟内检测到同一设备输出恢复即自动播放\n4. 已实测后台状态下仅依赖轮询即可从暂停恢复播放",
+  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.7/app-release.apk",
   "forceUpdate": false,
   "releaseDate": "2026-11-12"
 }

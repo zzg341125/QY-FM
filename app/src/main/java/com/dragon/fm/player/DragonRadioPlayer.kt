@@ -137,7 +137,8 @@ class DragonRadioPlayer(private val context: Context) {
     private var activeStationId: String? = null
     private var playStartTimeMs: Long = 0L
     private var lastAudioBecomingNoisyAtMs: Long = 0L
-    private var bluetoothResumeTimeoutJob: Job? = null
+    private var bluetoothReconnectMonitorJob: Job? = null
+    private var debugBluetoothResumeDevices: List<BluetoothAudioDevice>? = null
 
     /** 拔出耳机 / 断开蓝牙时，根据设置决定是否自动暂停 */
     private val noisyReceiver = object : BroadcastReceiver() {
@@ -150,7 +151,7 @@ class DragonRadioPlayer(private val context: Context) {
                         activeBluetoothDevices.map { it.toResumeDevice() },
                         lastAudioBecomingNoisyAtMs
                     )
-                    ensureBluetoothResumeTimeout()
+                    ensureBluetoothReconnectMonitor()
                 }
                 pauseInternal(clearBluetoothResume = false)
             }
@@ -204,20 +205,47 @@ class DragonRadioPlayer(private val context: Context) {
         return bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())
     }
 
+    internal fun setDebugBluetoothResumeDevices(devices: List<BluetoothAudioDevice>?) {
+        debugBluetoothResumeDevices = devices
+    }
+
     private fun clearBluetoothResume() {
-        bluetoothResumeTimeoutJob?.cancel()
-        bluetoothResumeTimeoutJob = null
+        bluetoothReconnectMonitorJob?.cancel()
+        bluetoothReconnectMonitorJob = null
         bluetoothResumePolicy.clear()
     }
 
-    private fun ensureBluetoothResumeTimeout() {
-        if (bluetoothResumeTimeoutJob?.isActive == true) return
-        bluetoothResumeTimeoutJob = scope.launch {
-            delay(BluetoothResumePolicy.RESUME_WINDOW_MS)
-            if (!bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())) {
-                clearBluetoothResume()
-                DragonMediaSessionService.requestNotificationUpdate()
+    private fun ensureBluetoothReconnectMonitor() {
+        if (bluetoothReconnectMonitorJob?.isActive == true) return
+        bluetoothReconnectMonitorJob = scope.launch {
+            val startedAtMs = SystemClock.elapsedRealtime()
+            var firstPoll = true
+            while (bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())) {
+                val elapsedMs = SystemClock.elapsedRealtime() - startedAtMs
+                val pollDelayMs = when {
+                    firstPoll -> 1_500L
+                    elapsedMs < 30_000L -> 1_000L
+                    elapsedMs < 5 * 60_000L -> 3_000L
+                    else -> 5_000L
+                }
+                delay(pollDelayMs)
+                firstPoll = false
+
+                if (!pauseOnHeadsetUnplug) {
+                    clearBluetoothResume()
+                    DragonMediaSessionService.requestNotificationUpdate()
+                    return@launch
+                }
+
+                val resumedDevices = debugBluetoothResumeDevices
+                    ?: bluetoothOutputDevices().map { it.toResumeDevice() }
+                if (resumedDevices.isNotEmpty()) {
+                    Log.i(TAG, "[Bluetooth] 轮询检测到蓝牙输出恢复，尝试续播")
+                    if (handleBluetoothDevicesAdded(resumedDevices)) return@launch
+                }
             }
+            clearBluetoothResume()
+            DragonMediaSessionService.requestNotificationUpdate()
         }
     }
 
@@ -229,7 +257,7 @@ class DragonRadioPlayer(private val context: Context) {
         if (isPlaybackActive()) {
             Log.i(TAG, "[Bluetooth] 蓝牙音频输出断开，自动暂停")
             bluetoothResumePolicy.rememberDisconnected(removedDevices, nowMs)
-            ensureBluetoothResumeTimeout()
+                ensureBluetoothReconnectMonitor()
             pauseInternal(clearBluetoothResume = false)
                 DragonMediaSessionService.requestNotificationUpdate()
         } else {
@@ -239,7 +267,7 @@ class DragonRadioPlayer(private val context: Context) {
             } else {
                 bluetoothResumePolicy.mergeDisconnected(removedDevices, nowMs)
             }
-            ensureBluetoothResumeTimeout()
+                ensureBluetoothReconnectMonitor()
             DragonMediaSessionService.requestNotificationUpdate()
         }
     }
