@@ -169,11 +169,16 @@ class DragonRadioPlayer(private val context: Context) {
         override fun onReceive(receiverContext: Context?, intent: Intent?) {
             if (!pauseOnHeadsetUnplug || intent == null) return
             val device = intent.bluetoothDeviceExtra() ?: return
+            val aclConnected = intent.action == BluetoothDevice.ACTION_ACL_CONNECTED
+            val aclDisconnected = intent.action == BluetoothDevice.ACTION_ACL_DISCONNECTED
             val type = when (intent.action) {
                 BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED ->
                     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
                 BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED ->
                     AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                BluetoothDevice.ACTION_ACL_CONNECTED,
+                BluetoothDevice.ACTION_ACL_DISCONNECTED ->
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
                 else -> return
             }
             val state = intent.getIntExtra(
@@ -181,14 +186,14 @@ class DragonRadioPlayer(private val context: Context) {
                 BluetoothProfile.STATE_DISCONNECTED
             )
             val resumeDevice = device.toResumeDevice(type)
-            when (state) {
-                BluetoothProfile.STATE_CONNECTED -> {
+            when {
+                aclConnected || state == BluetoothProfile.STATE_CONNECTED -> {
                     scope.launch {
-                        delay(400L)
+                        delay(if (aclConnected) 1_000L else 400L)
                         handleBluetoothDevicesAdded(listOf(resumeDevice))
                     }
                 }
-                BluetoothProfile.STATE_DISCONNECTED -> {
+                aclDisconnected || state == BluetoothProfile.STATE_DISCONNECTED -> {
                     handleBluetoothDevicesRemoved(listOf(resumeDevice))
                 }
             }
@@ -350,6 +355,7 @@ class DragonRadioPlayer(private val context: Context) {
         bluetoothReconnectMonitorJob = scope.launch {
             val startedAtMs = SystemClock.elapsedRealtime()
             var firstPoll = true
+            var bluetoothRouteGapSeen = !isLegacyBluetoothRouteActive()
             while (bluetoothResumePolicy.hasPending(SystemClock.elapsedRealtime())) {
                 val elapsedMs = SystemClock.elapsedRealtime() - startedAtMs
                 val pollDelayMs = when {
@@ -373,9 +379,29 @@ class DragonRadioPlayer(private val context: Context) {
                     Log.i(TAG, "[Bluetooth] 轮询检测到蓝牙输出恢复，尝试续播")
                     if (handleBluetoothDevicesAdded(resumedDevices)) return@launch
                 }
+                val routeActive = isLegacyBluetoothRouteActive()
+                if (!routeActive) {
+                    bluetoothRouteGapSeen = true
+                } else if (
+                    bluetoothRouteGapSeen &&
+                    bluetoothResumePolicy.consumeRouteRecovery(SystemClock.elapsedRealtime())
+                ) {
+                    Log.i(TAG, "[Bluetooth] 兼容路由状态恢复，自动继续播放")
+                    play()
+                    return@launch
+                }
             }
             clearBluetoothResume()
             DragonMediaSessionService.requestNotificationUpdate()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isLegacyBluetoothRouteActive(): Boolean {
+        return try {
+            audioManager?.isBluetoothA2dpOn == true || audioManager?.isBluetoothScoOn == true
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -455,6 +481,8 @@ class DragonRadioPlayer(private val context: Context) {
                 IntentFilter().apply {
                     addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
                     addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
+                    addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+                    addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
                 },
                 ContextCompat.RECEIVER_NOT_EXPORTED
             )

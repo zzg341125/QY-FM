@@ -96,6 +96,17 @@ class BluetoothResumePolicyTest {
     }
 
     @Test
+    fun resumesWhenOnlyTheBluetoothRouteStateRecovers() {
+        val policy = BluetoothResumePolicy()
+        val headphones = BluetoothAudioDevice(id = 9, type = 8, productName = "Headphones")
+
+        policy.rememberDisconnected(listOf(headphones), nowMs = 1_000L)
+
+        assertTrue(policy.consumeRouteRecovery(nowMs = 2_000L))
+        assertFalse(policy.consumeRouteRecovery(nowMs = 3_000L))
+    }
+
+    @Test
     fun mergesAConcurrentNoiseBroadcastWithTheRemovalCallback() {
         val policy = BluetoothResumePolicy()
         val headphones = BluetoothAudioDevice(id = 9, type = 8, productName = "Headphones")

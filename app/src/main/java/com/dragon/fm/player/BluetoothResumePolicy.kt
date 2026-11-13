@@ -53,6 +53,12 @@ internal class BluetoothResumePolicy {
         return resumed
     }
 
+    fun consumeRouteRecovery(nowMs: Long): Boolean {
+        if (!hasPending(nowMs)) return false
+        clear()
+        return true
+    }
+
     fun hasPending(nowMs: Long): Boolean {
         val deadline = expiresAtMs
         if (deadline == null) return false

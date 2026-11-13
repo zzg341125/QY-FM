@@ -1,8 +1,8 @@
 {
-  "versionCode": 18,
-  "versionName": "1.0.8",
-  "changelog": "1. 针对鸿蒙兼容层新增蓝牙附近设备权限，使用稳定蓝牙地址识别同一设备\n2. 新增 A2DP 与 HEADSET 系统蓝牙连接广播监听\n3. 新增蓝牙 Profile 连接状态轮询，不再只依赖 AudioManager\n4. 保留音频设备回调与低频轮询兜底，提高锁屏和后台重连续播可靠性",
-  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.8/app-release.apk",
+  "versionCode": 19,
+  "versionName": "1.0.9",
+  "changelog": "1. 新增 ACL 蓝牙连接广播监听，兼容不发送 A2DP/HEADSET 事件的鸿蒙系统\n2. 新增 isBluetoothA2dpOn / isBluetoothScoOn 兼容路由检测\n3. 路由状态轮询先检测断开空档，避免旧状态残留导致误恢复\n4. 多层兼容：A2DP、HEADSET、ACL、Profile、AudioManager 与低频轮询",
+  "downloadUrl": "https://github.com/zzg341125/QY-FM/releases/download/v1.0.9/app-release.apk",
   "forceUpdate": false,
   "releaseDate": "2026-11-12"
 }
