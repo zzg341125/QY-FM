@@ -1,6 +1,7 @@
 # QY·FM 原生鸿蒙版
 
-这是 QY·FM 的独立 HarmonyOS ArkTS / ArkUI 工程。原 Android 项目与 APK 发布不在此目录内修改。
+这是 QY·FM 的独立 HarmonyOS ArkTS / ArkUI 工程，代码与发布包位于
+[zzg341125/QYFM-HM](https://github.com/zzg341125/QYFM-HM)。
 
 ## 当前能力
 
@@ -41,8 +42,8 @@ devecocli signature generate --product default
 
 ## 发布约定
 
-- Android 继续使用 `v1.x.x` 标签和 APK。
-- HarmonyOS 原生版使用 `harmony-v1.x.x` 标签和 HAP。
-- 不覆盖或删除 Android `v1.0.9` 的 APK。
+- 使用 `harmony-v1.x.x` 标签发布 HarmonyOS 原生版。
+- 每个 Release 附带签名 HAP，应用内更新检查读取本仓库的最新稳定 Release。
+- 本机签名证书、密码和构建缓存不进入仓库。
 
 详细实现与真机验收说明见 [docs/HARMONYOS_NATIVE_MIGRATION.md](docs/HARMONYOS_NATIVE_MIGRATION.md)。

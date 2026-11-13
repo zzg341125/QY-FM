@@ -660,7 +660,7 @@ struct Index {
 
   private async openGithubPage(): Promise<void> {
     if (this.abilityContext !== undefined) {
-      await this.abilityContext.openLink('https://github.com/zzg341125/QY-FM');
+      await this.abilityContext.openLink('https://github.com/zzg341125/QYFM-HM');
     }
   }
 
@@ -1357,7 +1357,7 @@ struct Index {
         ListItem() {
           this.SettingsSwitchRow('⟳', '自动检查并下载更新', '启动后自动检查新版本，安装由系统确认。', 'autoUpdate')
         }
-        ListItem() { this.SettingsActionRow('⌘', 'GitHub 开源项目', 'github.com/zzg341125/QY-FM', 'github') }
+        ListItem() { this.SettingsActionRow('⌘', 'GitHub 开源项目', 'github.com/zzg341125/QYFM-HM', 'github') }
         if (this.settingsStatus.length > 0) {
           ListItem() {
             Text(this.settingsStatus)
